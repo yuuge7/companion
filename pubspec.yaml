@@ -1,7 +1,7 @@
 name: companion
 description: One local Android app for books, manga, film and anime. Four separate libraries.
 publish_to: 'none'
-version: 1.1.1+3
+version: 1.2.0+4
 environment:
   sdk: ^3.13.0
 dependencies:

@@ -1,4 +1,9 @@
 .sources/
+# Local agent notes and other Markdown; keep the public README.
+*.md
+!README.md
+
+# Flutter and build output.
 .dart_tool/
 .flutter-plugins*
 .packages
@@ -13,6 +18,14 @@ android/key.properties
 *.jks
 *.keystore
 *.p12
+*.pfx
+*.jks.base64
+signing-secrets.properties
+key.properties
+.env
+.env.*
+__pycache__/
+*.pyc
 *.log
 *.tmp
 windows/flutter/ephemeral/

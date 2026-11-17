@@ -1,0 +1,76 @@
+name: Companion release
+
+on:
+  workflow_run:
+    workflows: [Companion CI]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  release:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      (github.event.workflow_run.event == 'pull_request' ||
+       github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Only reruns of the same source run share a group. Distinct pushes never cancel.
+    concurrency:
+      group: companion-publish-${{ github.event.workflow_run.id }}
+      cancel-in-progress: false
+    steps:
+      # Always run publishing helpers from the trusted default branch.
+      # Never check out or execute the PR source in this privileged workflow.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate the source run and compute release metadata
+        id: plan
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const release = require('./scripts/release.cjs');
+            await release.prepare({ github, context, core });
+      - uses: actions/download-artifact@v4
+        if: steps.plan.outputs.skip != 'true'
+        with:
+          name: ${{ steps.plan.outputs.artifact }}
+          path: incoming
+          github-token: ${{ github.token }}
+          run-id: ${{ github.event.workflow_run.id }}
+      - uses: actions/setup-java@v4
+        if: steps.plan.outputs.skip != 'true'
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        if: steps.plan.outputs.skip != 'true'
+        with:
+          packages: 'build-tools;36.0.0'
+      - name: Verify app metadata and sign with the permanent release key
+        if: steps.plan.outputs.skip != 'true'
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          RELEASE_VERSION_NAME: ${{ steps.plan.outputs.versionName }}
+          RELEASE_VERSION_CODE: ${{ steps.plan.outputs.versionCode }}
+          RELEASE_APK: ${{ steps.plan.outputs.apk }}
+        run: python3 scripts/signing.py sign-ci incoming/app-release.apk "dist/$RELEASE_APK"
+      - name: Publish a new release with a commit changelog
+        if: steps.plan.outputs.skip != 'true'
+        uses: actions/github-script@v7
+        with:
+          # A PAT with Contents + Workflows write is needed for PRs changing workflows.
+          github-token: ${{ secrets.RELEASE_TOKEN || github.token }}
+          script: |
+            const release = require('./scripts/release.cjs');
+            await release.publish({ github, context, core, directory: 'dist' });

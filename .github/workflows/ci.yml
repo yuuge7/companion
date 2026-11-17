@@ -1,21 +1,41 @@
-name: Companion checks
+name: Companion CI
+
 on:
   push:
+    branches: [main]
   pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
   workflow_dispatch:
+
+# PR code runs without release credentials, including PRs from forks.
 permissions:
   contents: read
+
+# Each event keeps its own run number; do not cancel earlier pushes or PRs.
 jobs:
   verify:
     runs-on: windows-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test release and signing helpers
+        run: |
+          node --test scripts/release.test.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m unittest discover -s scripts -p "test_*.py"
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.47.0'
           channel: stable
           cache: true
-      - run: flutter pub get
+      - run: flutter pub get --enforce-lockfile
       - run: flutter analyze
       - run: dart format --output=none --set-exit-if-changed lib test integration_test
       - run: flutter test --reporter expanded
@@ -25,10 +45,21 @@ jobs:
           name: visual-differences
           path: test/**/failures/**
           if-no-files-found: ignore
+
   android:
+    needs: verify
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Set the app version for this run
+        run: node scripts/release.cjs plan
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -38,9 +69,15 @@ jobs:
           flutter-version: '3.47.0'
           channel: stable
           cache: true
-      - run: flutter pub get
-      - run: flutter build apk --debug
+      - run: flutter pub get --enforce-lockfile
+      - name: Build universal release APK
+        env:
+          COMPANION_UNSIGNED_RELEASE: 'true'
+        run: flutter build apk --release
       - uses: actions/upload-artifact@v4
         with:
-          name: Companion-development-apk
-          path: build/app/outputs/flutter-apk/app-debug.apk
+          name: Companion-unsigned-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14

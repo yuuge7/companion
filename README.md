@@ -1,104 +1,258 @@
 # Companion
 
-One Flutter Android app with four separate companions: **Books, Manga, Film and Anime**.
-Switch sections using the bottom bar (or the side rail on a wide screen).
-Each section remembers its navigation, search and filters while you switch.
+A local Android library for books, manga, films and anime, built with Flutter.
+Companion brings four independent collections into one app with shared navigation,
+search, filters, ratings and backup tools.
 
-## What is shared
+[Download releases](https://github.com/yuuge7/companion/releases) ·
+[Report an issue](https://github.com/yuuge7/companion/issues) ·
+[MIT license](LICENSE)
 
-- One app installation, startup, navigation and last-used section.
-- One light/dark/system preference and one app lock, including recent-app preview protection.
-- Common rating controls, bottom-sheet chrome, atomic file writes, diagnostics and text-file saving.
-- The same library screen, rows, search, shelf controls, sort/filter toolbar, add/edit actions, statistics summary and backup screen in every section.
-- The existing book, manga and film features remain in their own modules. Common plumbing does not turn their records into a generic media model.
+## Features
 
-All sections use one palette, typography, form controls and navigation theme. Material You, when enabled, applies across all sections. The shared interface is documented in [the UI contract](docs/ui-contract.md).
+- **Books:** reading progress, audiobook listening time, editions, rereads, quotes
+  and reading sessions. Complete backups include cover images.
+- **Manga:** chapter progress, rereads and reading history, with imports from
+  MyAnimeList, Anime-Planet and Mihon/Tachiyomi.
+- **Film:** movie and series libraries, viewing logs, episode/season progress,
+  statistics and optional folder backups.
+- **Anime:** episode and movie progress, rewatches, release metadata, half-star
+  ratings, import previews and recovery snapshots.
+- **Shared experience:** light/dark/system themes, optional Material You colors,
+  app lock, recent-app preview protection, large-text support and adaptive navigation.
+- **Home-screen widgets:** Current book, Manga reading and What fits tonight.
 
-## What stays separate
+The four libraries retain separate data models, storage and backup formats.
+Switching sections preserves each library's navigation, search and filters.
+Library data stays on the device; poster and cover images can be fetched online.
 
-| Section | Progress and history | Import | Export |
-| --- | --- | --- | --- |
-| Books | Pages, audiobook listening time, editions, reads/rereads, quotes and reading sessions | Existing `.bcbackup`, legacy/schema-2 book JSON, Goodreads CSV | `.bcbackup` with covers, book JSON, CSV, HTML, PDF |
-| Manga | Chapters, rereads and reading events | Existing manga JSON, MyAnimeList **manga** XML, Anime-Planet **manga** JSON, Mihon/Tachiyomi backups | Existing manga JSON array, manga CSV |
-| Film | Movie minutes, series episodes/seasons and viewing logs | Existing Screen Companion schema-2 JSON and legacy film arrays | Existing film JSON, film CSV |
-| Anime | TV/OVA/ONA/special episodes, anime-movie minutes, studio/release season, rewatches and progress history | Anime Companion schema-1 JSON, Anime-Planet **anime** JSON, MyAnimeList **anime** XML, including gzip | Anime JSON, anime CSV |
+### Import and export
 
-CSV is a report for Manga, Film and Anime; use their JSON for a complete reimportable backup.
-Books' complete backup also includes cover image bytes.
-Anime JSON preserves notes, tags, ratings, release metadata, URLs, date precision and progress events.
-MyAnimeList's 0–10 score is mapped to the shared five-star scale on anime import.
-Anime ratings retain half stars. Anime-Planet's six anime statuses, watched episodes,
-watch counts and date precision are preserved. Format, episode totals and runtime stay
-unspecified when absent from its export. See [Anime-Planet import](docs/anime-planet-import.md).
+| Library | Import | Export |
+| --- | --- | --- |
+| Books | `.bcbackup`, legacy/schema-2 book JSON, Goodreads CSV | Complete `.bcbackup`, JSON, CSV, HTML, PDF |
+| Manga | Manga JSON, MyAnimeList manga XML, Anime-Planet manga JSON, Mihon/Tachiyomi backups | Manga JSON, CSV |
+| Film | Screen Companion schema-2 JSON and legacy film arrays | Film JSON, CSV |
+| Anime | Anime Companion schema-1 JSON, Anime-Planet anime JSON, MyAnimeList anime XML; gzip supported | Anime JSON, CSV |
 
-There is **no universal import/export format, cross-type library, combined progress total or automatic conversion between sections**.
-Recognizable foreign records and backup envelopes are rejected before importing.
-Unlabelled legacy records containing only generic fields, such as a title, cannot prove their original type; import legacy files in their original section.
+Use each library's backup format for a complete round trip. CSV is a report for
+Manga, Film and Anime. Import a backup in its matching section; Companion rejects
+recognizable backups belonging to another library.
 
-## Move from the old apps
+## Install
 
-1. In Book Companion, export a complete `.bcbackup` to include covers.
-2. In Manga Companion, export its JSON backup.
-3. In Screen Companion, export its JSON backup.
-4. Install Companion, then import each file from the matching section's settings/tools.
-5. Check each library before removing any old app.
+Download `Companion-vX.Y.apk` from [Releases](https://github.com/yuuge7/companion/releases)
+and open it on an Android device. Allow installation from your browser or file
+manager when Android prompts. Android 7.0 (API 24) or newer is required. The universal
+APK supports arm64-v8a, armeabi-v7a and x86_64.
 
-Companion uses a new Android ID, `io.github.yuuge7.companion`, and installs alongside the three old apps.
-Android keeps each app's private files separate, so existing libraries move through exports rather than by reading another app's storage.
+Releases from `main` are stable releases. Pull request builds are marked as
+prereleases. Each release includes an APK, `CHANGELOG.md` generated from commit
+messages, and `SHA256SUMS.txt`.
 
-Books and Film retain their existing import previews and recovery features.
-Anime previews new/newer/retained entries, supports merge or replace, saves a pre-import snapshot, and keeps deleted anime in trash for 30 days.
-Anime merge keeps the local ID and accepts only newer incoming changes; ties retain the local copy.
-Imported episode totals do not manufacture dated viewing events or an unknown runtime.
+Updates signed with the same key preserve the installed app's data. Older local
+builds used development signing and cannot be updated in place with this new
+release identity. Export all four libraries before replacing an installation with
+a different signing certificate.
 
-The Current book, Manga reading and What fits tonight Android widgets are retained.
-They open their own section and hide title details when the shared app lock is enabled.
-Film's automatic folder backup remains **film-only**.
+### Move from the original apps
 
-## Build and verify
+Export a complete `.bcbackup` from Book Companion and JSON backups from Manga
+Companion and Screen Companion. Install Companion and import each backup in the
+corresponding section. Verify the imported libraries before removing the old apps.
+Companion's application ID is `io.github.yuuge7.companion`, so it installs alongside
+the original apps.
 
-Use Flutter **3.47.0**, Dart **3.13**, JDK 17+ and Android compile SDK 37.
-Minimum Android API: 24. The lockfile is committed.
+## Development setup
+
+### Requirements
+
+| Tool | Version |
+| --- | --- |
+| Flutter | **3.47.0**, stable |
+| Dart | **3.13**, bundled with Flutter |
+| JDK | **17** or newer; CI uses 17 |
+| Android SDK | Platform **37**, Build Tools **36.0.0**, platform-tools and Flutter's required NDK |
+| Node.js | **22** for release helpers and their tests |
+| Python | **3.10+** for signing helpers; no third-party packages required |
+| Git | A current installation |
+
+Install Flutter and Android Studio with the Android SDK. Put `flutter`, `dart`,
+`java`, `keytool`, `node` and `python` on your path. Then clone the repository:
 
 ```sh
-flutter pub get
+git clone https://github.com/yuuge7/companion.git
+cd companion
+flutter doctor
+flutter doctor --android-licenses
+flutter pub get --enforce-lockfile
+flutter devices
+flutter run -d <device-id>
+```
+
+If Flutter selects the wrong Java or Android SDK installation, configure them:
+
+```sh
+flutter config --jdk-dir="<path-to-jdk>"
+flutter config --android-sdk="<path-to-android-sdk>"
+```
+
+Use the SDK Manager to install Android platform 37 and Build Tools 36.0.0. Flutter
+and Gradle resolve the NDK version declared by the pinned Flutter SDK. The committed
+`pubspec.lock` keeps package resolution consistent across machines.
+
+### Verify changes
+
+```sh
 flutter analyze
 dart format --output=none --set-exit-if-changed lib test integration_test
-flutter test
+flutter test --reporter expanded
+node --test scripts/release.test.cjs
+python -m unittest discover -s scripts -p "test_*.py"
 flutter build apk --release
 ```
 
-The APK is produced at `build/app/outputs/flutter-apk/app-release.apk`.
-Local builds use development signing unless `android/key.properties` supplies a release key.
-Keep using the same signing key for future updates to this new app.
+The APK is written to `build/app/outputs/flutter-apk/app-release.apk`. Without local
+signing configuration, a contributor's release build uses development signing.
+Contributors can build and test without the maintainer's private key.
 
-On a disposable Android emulator:
+Golden images are captured on Windows with the pinned Flutter version. Use Windows
+for pixel comparisons; Linux and macOS may render text differently. Update goldens
+only when a visual change is intentional and inspect the resulting images.
+
+On a disposable Android emulator, run the integration suite:
 
 ```sh
 flutter test integration_test/companion_test.dart -d emulator-5554
 ```
 
-The integration test uses temporary libraries and an isolated manga preference key.
-It checks section navigation, real file persistence, anime progress, typed backup rejection and all native channels.
-The three upstream unit/widget suites are retained under `test/books`, `test/manga` and `test/film`.
-New tests cover anime persistence/recovery, every pair of foreign backup types, retained routes, shared settings, narrow screens and large text.
-Visual baselines are captured on Windows with the pinned Flutter version.
+The suite covers section navigation, persistence, typed imports and native
+channels. Use an emulator or test device without valuable library data.
 
-## Source layout
+### Project layout
 
 ```text
-lib/main.dart        one startup and adaptive app shell
-lib/core/            shared infrastructure and controls
-lib/books/           Book Companion features and book-only data model
-lib/manga/           Manga Companion features and manga-only data model
-lib/film/            Screen Companion features and film/series model
-lib/anime/           independent anime model, backup codec, store and UI
+lib/main.dart       App startup and adaptive shell
+lib/core/           Shared UI, persistence helpers, diagnostics and app lock
+lib/books/          Book library, reading progress and backups
+lib/manga/          Manga library and importers
+lib/film/           Film/series library and viewing history
+lib/anime/          Anime library, import previews and recovery
+android/            Android app, widgets and platform channels
+test/               Unit, widget, regression and Windows golden tests
+integration_test/   On-device integration tests
+scripts/            Release planning, publishing, signing and helper tests
+.github/workflows/  Build checks and release publication
 ```
 
-`lib/core/library.dart` supplies the shared interface. Each section's
-`library_controller.dart` connects it to that section's existing models and operations.
-These presentation adapters do not combine storage or change backup schemas.
+### Contribute
 
-The three supplied repos are the starting point; exact imported commits are recorded in
-[Books](docs/books-source.md), [Manga](docs/manga-source.md) and [Film](docs/film-source.md).
-Bundled font license texts are retained in `assets/fonts`.
+Create a feature branch, keep changes focused and run the checks above before
+opening a pull request against `main`. Include a description of the behavior change
+and relevant screenshots for UI work. Cover meaningful changes to persistence,
+imports, backups or native channels with regression tests.
+
+Keep the four libraries' schemas separate. Shared presentation belongs in
+`lib/core`; library-specific behavior belongs in its own module. Preserve existing
+backup compatibility and app-lock privacy behavior. Use clear commit subjects such
+as `fix: preserve anime import dates` or `feat: add manga shelf filters` because
+commit subjects become the release changelog.
+
+## Automatic GitHub releases
+
+`Companion CI` runs for every push to `main`, every opened/reopened/updated PR
+targeting `main`, and manual runs. It checks the app on Windows, assigns the version
+and builds an unsigned release APK on Linux. After a successful run, `Companion
+release` verifies the APK's application ID and version, signs it with the permanent
+key, and publishes a new release named **Companion vX.Y**.
+
+PR source is built without secrets. The signing workflow runs helpers from the
+default branch and treats the downloaded APK as data. Fork PRs follow the same path;
+GitHub may require a maintainer to approve their CI run first. Both workflow files
+must be present on the repository's default branch (`main`) to enable publication.
+
+### Versioning and release history
+
+The local starting version is **1.2.0+4**. `scripts/release.cjs` allocates versions
+from the CI workflow's unique run number: run 1 is `Companion v1.2` with Android
+version `1.2.0+4`, run 2 is `Companion v1.3` / `1.3.0+5`, and so on. If the existing
+workflow already has runs, numbering continues from its current run number.
+
+Each push or PR update receives a new version. Failed runs can leave gaps. A rerun
+keeps the original version; a published release is left unchanged. Tags are never
+force-moved and published assets are never replaced. CI updates `pubspec.yaml` in
+its workspace and does not create version-bump commits in the repository.
+
+Keep the `SERIES` offsets in `scripts/release.cjs` fixed. Do not delete/recreate the
+CI workflow to reset its run counter. To start a new major series, increase
+`SERIES.major` and update the local pubspec version; keep the build-number offset
+so Android version codes continue increasing.
+
+The changelog lists commit subjects and links since the previous stable release.
+PR changelogs list commits relative to `main`; the first stable release includes
+the existing history. Releases are published only after the APK, changelog and
+checksums have all uploaded. An interrupted draft can be completed by a rerun
+when its existing assets match; differing assets cause a failure instead of an
+overwrite.
+
+### Repository configuration
+
+In **Settings → Secrets and variables → Actions**, create these repository secrets:
+
+| Secret | Local source |
+| --- | --- |
+| `ANDROID_KEYSTORE_BASE64` | Entire contents of `companion-release.jks.base64` |
+| `ANDROID_KEYSTORE_PASSWORD` | `storePassword` in `signing-secrets.properties` |
+| `ANDROID_KEY_ALIAS` | `keyAlias` in `signing-secrets.properties` (`companion`) |
+| `ANDROID_KEY_PASSWORD` | `keyPassword` in `signing-secrets.properties` |
+
+Enable GitHub Actions and allow the actions used by the workflows. The publishing
+workflow requests `contents: write` for releases/tags and `actions: read` for the
+build artifact; no personal token is needed for ordinary code changes.
+
+For releases of PRs that modify `.github/workflows`, GitHub also requires permission
+to write workflows when tagging that source commit. Add an optional `RELEASE_TOKEN`
+secret containing a repository-scoped fine-grained token with **Contents: read and
+write** and **Workflows: read and write**. The publisher uses it only for release
+publication; it is never supplied to PR builds.
+
+## Preserve the signing identity
+
+This checkout's permanent RSA signing key is **`companion-release.jks` in the
+project root**, with alias `companion`. Its certificate SHA-256 is:
+
+```text
+83091746f0f31e1889dafccad47b14c15d9ec40e3d332c5e640852ddaa296d6a
+```
+
+The passwords are in `signing-secrets.properties`. Local Gradle configuration is
+in `android/key.properties`; a base64 export for GitHub is in
+`companion-release.jks.base64`. All four files are ignored by Git. The keystore and
+password file are the essential backup: keep encrypted copies in at least two
+secure locations. Never attach them to issues, PRs or releases. Losing the signing
+key prevents future updates from matching this app's existing signature.
+
+### Move maintainer signing to another machine
+
+1. Complete the development setup and clone the repository on the new machine.
+2. Transfer **`companion-release.jks` and `signing-secrets.properties`** securely
+   into the new checkout's root directory.
+3. Run `python scripts/signing.py configure`. It checks the key, recreates
+   `android/key.properties` and the base64 export, and prints the certificate
+   fingerprint. Confirm it matches the fingerprint above.
+4. Run `flutter build apk --release` to produce an APK signed with the same key.
+
+The configuration uses a path relative to the project root, so moving between
+Windows, macOS and Linux does not require editing the keystore path. Set
+`ANDROID_HOME` to your Android SDK if using the standalone CI signing helper.
+Repository secrets remain configured in GitHub and do not need to be recreated
+when you change computers.
+
+`python scripts/signing.py generate` creates a new identity only when none of the
+signing files exist. It is for a new app identity, not for restoring this app on
+another machine. Restore the original files for every future Companion release.
+
+## License
+
+Companion is distributed under the [MIT license](LICENSE). Bundled fonts retain
+their individual license notices in `assets/fonts`.

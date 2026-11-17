@@ -51,7 +51,10 @@ android {
     buildTypes {
         release {
             // Falls back to debug signing when key.properties is absent (e.g. fresh clone).
-            signingConfig = if (keystorePropertiesFile.exists()) {
+            signingConfig = if (System.getenv("COMPANION_UNSIGNED_RELEASE") == "true") {
+                // CI signs the finished APK in a separate, trusted publishing job.
+                null
+            } else if (keystorePropertiesFile.exists()) {
                 signingConfigs.getByName("release")
             } else {
                 signingConfigs.getByName("debug")
