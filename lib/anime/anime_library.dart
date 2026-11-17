@@ -171,14 +171,14 @@ class AnimeLibrary extends ChangeNotifier {
     } else {
       final merged = _entries.toList();
       for (final entry in incoming) {
-        final index = merged.indexWhere(
-          (e) => e.id == entry.id || e.identity == entry.identity,
-        );
+        final previous = entry.importMatch(merged);
+        final index = previous == null
+            ? -1
+            : merged.indexWhere((e) => e.id == previous.id);
         if (index < 0) {
           merged.add(entry);
         } else if (entry.updatedAt > merged[index].updatedAt) {
-          final json = entry.toJson()..['id'] = merged[index].id;
-          merged[index] = AnimeEntry.fromJson(json);
+          merged[index] = entry.importOver(merged[index]);
         }
       }
       _entries = merged;

@@ -1,16 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:companion/core/library.dart';
 import 'package:companion/manga/app_state.dart';
 import 'package:companion/manga/importers.dart';
+import 'package:companion/manga/library_controller.dart';
 import 'package:companion/manga/models/manga_entry.dart';
-import 'package:companion/manga/screens/home_screen.dart';
 import 'package:companion/manga/screens/import_preview.dart';
 import 'package:companion/manga/storage.dart';
 import 'package:companion/manga/theme.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Rows without a cover print the title on the spine too, so each title
-/// appears twice; any of them hits the row.
 Finder row(String title) => find.text(title).first;
 
 MangaEntry entry(
@@ -35,10 +34,13 @@ Future<AppState> stateWith(List<MangaEntry> items) async {
 }
 
 Future<void> pumpHome(WidgetTester tester, AppState state) async {
+  final controller = MangaLibraryController(state);
+  addTearDown(controller.dispose);
+  addTearDown(state.dispose);
   await tester.pumpWidget(
     MaterialApp(
       theme: buildTheme(Brightness.light),
-      home: HomeScreen(state: state),
+      home: LibraryScreen(controller: controller),
     ),
   );
 }
@@ -94,13 +96,13 @@ void main() {
     final state = await stateWith([entry('Berserk'), entry('Monster')]);
     await pumpHome(tester, state);
 
-    await tester.tap(find.byTooltip('More actions for Berserk'));
+    await tester.tap(find.byTooltip('Actions for Berserk'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Delete'));
+    await tester.tap(find.text('Delete title'));
     await tester.pumpAndSettle();
 
     expect(state.entries.map((e) => e.title), ['Monster']);
-    expect(find.text('Deleted Berserk'), findsOneWidget);
+    expect(find.text('Berserk deleted.'), findsOneWidget);
 
     await tester.tap(find.text('Undo'));
     await tester.pumpAndSettle();
@@ -123,10 +125,12 @@ void main() {
     await tester.pump();
     expect(find.text('2 selected'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('Delete selected'));
+    await tester.tap(find.byTooltip('Bulk actions'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete selected'));
     await tester.pumpAndSettle();
     expect(state.entries.map((e) => e.title), ['Vagabond']);
-    expect(find.text('Deleted 2 titles'), findsOneWidget);
+    expect(find.text('2 manga updated.'), findsOneWidget);
 
     await tester.tap(find.text('Undo'));
     await tester.pumpAndSettle();
@@ -139,34 +143,43 @@ void main() {
 
     await tester.longPress(row('Berserk'));
     await tester.pump();
-    await tester.tap(find.byTooltip('Select all on this shelf'));
+    await tester.tap(find.byTooltip('Select all visible titles'));
     await tester.pump();
-    await tester.tap(find.byTooltip('Move selected'));
+    await tester.tap(find.byTooltip('Bulk actions'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Move to on hold'));
+    await tester.tap(find.text('Move to On hold'));
     await tester.pumpAndSettle();
 
     expect(state.countFor(ShelfStatus.onHold), 2);
   });
 
-  testWidgets('swipe right logs a chapter', (tester) async {
+  testWidgets('chapter controls log and reverse progress', (tester) async {
     final state = await stateWith([entry('Berserk', chapter: 9)]);
     await pumpHome(tester, state);
 
-    await tester.drag(row('Berserk'), const Offset(400, 0));
+    await tester.tap(find.byTooltip('Increase chapters for Berserk'));
     await tester.pumpAndSettle();
     expect(state.entries.single.currentChapter, 10);
+    expect(state.entries.single.history.single.delta, 1);
+    await tester.tap(find.byTooltip('Decrease chapters for Berserk'));
+    await tester.pumpAndSettle();
+    expect(state.entries.single.currentChapter, 9);
+    expect(state.entries.single.history, isEmpty);
   });
 
-  testWidgets('swipe left marks read, with undo', (tester) async {
+  testWidgets('row actions move a title to read and back', (tester) async {
     final state = await stateWith([entry('Berserk', chapter: 9)]);
     await pumpHome(tester, state);
 
-    await tester.drag(row('Berserk'), const Offset(-500, 0));
+    await tester.tap(find.byTooltip('Actions for Berserk'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Move to Read'));
     await tester.pumpAndSettle();
     expect(state.entries.single.status, ShelfStatus.read);
 
-    await tester.tap(find.text('Undo'));
+    await tester.tap(find.byTooltip('Actions for Berserk'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Move to Reading'));
     await tester.pumpAndSettle();
     expect(state.entries.single.status, ShelfStatus.reading);
   });
@@ -175,19 +188,19 @@ void main() {
     final state = await stateWith([]);
     await pumpHome(tester, state);
 
-    expect(find.text('Start your shelf'), findsOneWidget);
-    expect(find.text('Import a backup or list'), findsOneWidget);
+    expect(find.text('Your manga library starts here'), findsOneWidget);
+    expect(find.text('Import & export'), findsOneWidget);
 
-    await tester.tap(find.text('Add your first title'));
+    await tester.tap(find.text('Add title'));
     await tester.pumpAndSettle();
-    expect(find.text('Add a title'), findsOneWidget);
+    expect(find.text('Add manga'), findsOneWidget);
   });
 
   testWidgets('adding a title already on the shelf warns', (tester) async {
     final state = await stateWith([entry('Kaguya-sama: Love Is War')]);
     await pumpHome(tester, state);
 
-    await tester.tap(find.byTooltip('Add a title'));
+    await tester.tap(find.text('Add title'));
     await tester.pumpAndSettle();
     await tester.enterText(
       find.byType(TextField).first,
@@ -202,7 +215,7 @@ void main() {
     expect(find.text('Add anyway'), findsOneWidget);
   });
 
-  testWidgets('every shelf has a tab', (tester) async {
+  testWidgets('every shelf has a filter', (tester) async {
     final state = await stateWith([
       entry('Berserk'),
       entry('Someday', status: ShelfStatus.planned),
@@ -210,9 +223,11 @@ void main() {
     await pumpHome(tester, state);
 
     for (final s in ShelfStatus.values) {
-      expect(find.text(s.rail), findsOneWidget);
+      expect(find.text('${s.label}  ${state.countFor(s)}'), findsOneWidget);
     }
-    await tester.tap(find.text('PLANNED'));
+    final planned = find.text('Plan to read  1');
+    await tester.ensureVisible(planned);
+    await tester.tap(planned);
     await tester.pump();
     expect(find.text('Someday'), findsWidgets);
     expect(find.text('Berserk'), findsNothing);

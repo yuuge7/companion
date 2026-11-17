@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:companion/anime/anime_backup.dart';
 import 'package:companion/anime/anime_entry.dart';
 import 'package:companion/anime/anime_library.dart';
+import 'package:companion/anime/anime_screen.dart';
+import 'package:companion/core/library.dart';
 import 'package:companion/books/models/book.dart';
 import 'package:companion/books/services/library_model.dart';
 import 'package:companion/books/services/storage_service.dart';
@@ -16,6 +18,7 @@ import 'package:companion/manga/app_state.dart' as manga;
 import 'package:companion/manga/models/manga_entry.dart';
 import 'package:companion/manga/storage.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -168,6 +171,52 @@ void main() {
             .invokeMethod<String>('saveFile'),
         throwsA(isA<PlatformException>()),
       );
+      final planetFile = File('${directory.path}/anime-planet.json');
+      await planetFile.writeAsString(
+        jsonEncode({
+          'user': {'name': 'integration-fixture'},
+          'entries': [
+            {
+              'name': 'Integration Anime-Planet',
+              'status': 'watching',
+              'eps': 9,
+              'rating': 4.5,
+              'times': 2,
+              'started': '2024-09-00 00:00:00',
+              'completed': null,
+            },
+          ],
+        }),
+      );
+      final planetEntries = await compute(
+        AnimeBackup.parse,
+        await planetFile.readAsBytes(),
+      );
+      final decision = openLibraryPage<bool>(
+        tester.element(find.byType(LibraryScreen)),
+        AnimeImportPreview(incoming: planetEntries, existing: anime.entries),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Preview anime import'), findsOneWidget);
+      await tester.tap(find.text('Merge anime library'));
+      await tester.pumpAndSettle();
+      expect(await decision, isFalse);
+      await anime.importEntries(planetEntries, replace: false);
+      await tester.pumpAndSettle();
+      expect(find.text('Integration Anime-Planet'), findsOneWidget);
+      final planetReopened = AnimeLibrary(Directory('${directory.path}/anime'));
+      await planetReopened.load();
+      expect(planetReopened.entries, hasLength(2));
+      final planetEntry = planetReopened.entries.singleWhere(
+        (e) => e.title == 'Integration Anime-Planet',
+      );
+      expect(planetEntry.currentEpisode, 9);
+      expect(planetEntry.rating, 4.5);
+      expect(planetEntry.rewatches, 1);
+      expect(planetEntry.startedDate, '2024-09');
+      expect(planetEntry.animeFormat, AnimeFormat.unknown);
+      expect(planetEntry.history, isEmpty);
+      planetReopened.dispose();
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
       reopened.dispose();

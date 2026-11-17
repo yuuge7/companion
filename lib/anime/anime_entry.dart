@@ -5,7 +5,8 @@ enum AnimeFormat {
   movie('Movie'),
   ova('OVA'),
   ona('ONA'),
-  special('Special');
+  special('Special'),
+  unknown('Unspecified');
 
   const AnimeFormat(this.label);
   final String label;
@@ -16,7 +17,8 @@ enum AnimeStatus {
   planned('Plan to watch'),
   completed('Completed'),
   onHold('On hold'),
-  dropped('Dropped');
+  dropped('Dropped'),
+  wontWatch("Won't watch");
 
   const AnimeStatus(this.label);
   final String label;
@@ -44,6 +46,7 @@ class AnimeEntry {
     this.finishedDate = '',
     this.rewatches = 0,
     this.malId,
+    this.fromAnimePlanetExport = false,
     int? addedAt,
     int? updatedAt,
     List<Map<String, dynamic>> history = const [],
@@ -66,14 +69,13 @@ class AnimeEntry {
       finishedDate;
   final AnimeFormat animeFormat;
   final AnimeStatus status;
-  final int currentEpisode,
-      watchedMinutes,
-      rating,
-      rewatches,
-      addedAt,
-      updatedAt;
+  final double rating;
+  final int currentEpisode, watchedMinutes, rewatches, addedAt, updatedAt;
   final int? totalEpisodes, episodeMinutes, year, malId;
   final List<String> tags;
+
+  /// Transient import information; never included in a saved backup.
+  final bool fromAnimePlanetExport;
 
   /// Only explicit progress actions get a date. Imported progress has no invented history.
   final List<Map<String, dynamic>> history;
@@ -92,6 +94,46 @@ class AnimeEntry {
       : currentEpisode * episodeMinutes!;
   String get identity =>
       '${title.trim().toLowerCase()}|${animeFormat.name}|${year ?? ""}';
+
+  AnimeEntry? importMatch(List<AnimeEntry> existing) {
+    final exact = existing.where((e) => e.id == id).firstOrNull;
+    if (exact != null) return exact;
+    final sameIdentity = existing
+        .where((e) => e.identity == identity)
+        .firstOrNull;
+    if (sameIdentity != null) return sameIdentity;
+    if (!fromAnimePlanetExport) return null;
+    // AP lacks format/year. Only match an existing title when it is unambiguous.
+    final sameTitle = existing
+        .where(
+          (e) => e.title.trim().toLowerCase() == title.trim().toLowerCase(),
+        )
+        .toList();
+    return sameTitle.length == 1 ? sameTitle.single : null;
+  }
+
+  AnimeEntry importOver(AnimeEntry previous) {
+    if (!fromAnimePlanetExport) {
+      return AnimeEntry.fromJson(toJson()..['id'] = previous.id);
+    }
+    // Update only fields AP actually exports. Keep manually supplied metadata,
+    // movie minutes and dated progress events when importing the list again.
+    final json = previous.toJson()
+      ..['status'] = status.name
+      ..['rating'] = rating
+      ..['rewatches'] = rewatches
+      ..['updatedAt'] = updatedAt;
+    if (startedDate.isNotEmpty) json['startedDate'] = startedDate;
+    if (finishedDate.isNotEmpty) json['finishedDate'] = finishedDate;
+    if (!previous.isMovie) {
+      json['currentEpisode'] = currentEpisode;
+      if (previous.totalEpisodes != null &&
+          currentEpisode > previous.totalEpisodes!) {
+        json['totalEpisodes'] = null;
+      }
+    }
+    return AnimeEntry.fromJson(json);
+  }
 
   AnimeEntry withProgress(int value, {bool log = true}) {
     final next = value.clamp(0, total ?? 100000);
@@ -153,7 +195,10 @@ class AnimeEntry {
     'history': history,
   };
 
-  factory AnimeEntry.fromJson(Map<String, dynamic> json) {
+  factory AnimeEntry.fromJson(
+    Map<String, dynamic> json, {
+    bool fromAnimePlanetExport = false,
+  }) {
     int? number(String key, {int min = 0, int max = 100000}) {
       final raw = json[key];
       if (raw == null) return null;
@@ -180,6 +225,13 @@ class AnimeEntry {
     final total = number('totalEpisodes', min: 1);
     final minutes = number('episodeMinutes', min: 1);
     final watched = number('watchedMinutes') ?? 0;
+    final rawRating = json['rating'] ?? 0;
+    final rating = rawRating is num
+        ? rawRating.toDouble()
+        : double.tryParse('$rawRating');
+    if (rating == null || !rating.isFinite || rating < 0 || rating > 5) {
+      throw const FormatException('Invalid rating.');
+    }
     if ((total != null && current > total) ||
         (format == AnimeFormat.movie && minutes != null && watched > minutes)) {
       throw const FormatException('Progress exceeds the total.');
@@ -246,7 +298,7 @@ class AnimeEntry {
       studio: text('studio', 1000),
       year: number('year', min: 1, max: 9999),
       season: text('season', 100),
-      rating: number('rating', max: 5) ?? 0,
+      rating: rating,
       note: text('note'),
       tags: tags(),
       posterUrl: text('posterUrl', 4000),
@@ -258,6 +310,7 @@ class AnimeEntry {
       addedAt: number('addedAt', max: 8640000000000000),
       updatedAt: number('updatedAt', max: 8640000000000000),
       history: events,
+      fromAnimePlanetExport: fromAnimePlanetExport,
     );
   }
 }

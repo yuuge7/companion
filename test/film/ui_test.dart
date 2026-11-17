@@ -4,10 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:companion/core/library.dart';
 import 'package:companion/film/app_state.dart';
+import 'package:companion/film/library_controller.dart';
 import 'package:companion/film/models/shelf_entry.dart';
 import 'package:companion/film/screens/edit_sheet.dart';
-import 'package:companion/film/screens/home_screen.dart';
 import 'package:companion/film/screens/import_sheet.dart';
 import 'package:companion/film/screens/settings_sheet.dart';
 import 'package:companion/film/screens/stats_sheet.dart';
@@ -78,10 +79,6 @@ Future<void> loadFonts() async {
     ),
     ('PlexMono', ['IBMPlexMono-Regular.ttf', 'IBMPlexMono-Medium.ttf']),
     ('Marquee', ['Oswald-Medium.ttf', 'Oswald-SemiBold.ttf']),
-    (
-      'Grotesk',
-      ['Archivo-Regular.ttf', 'Archivo-Medium.ttf', 'Archivo-SemiBold.ttf'],
-    ),
     ('Readout', ['DMMono-Regular.ttf', 'DMMono-Medium.ttf']),
   ]) {
     final loader = FontLoader(family);
@@ -103,6 +100,9 @@ Future<void> pumpShelf(
   addTearDown(tester.view.resetDevicePixelRatio);
   await tester.binding.setSurfaceSize(Size(width, 844));
   addTearDown(() => tester.binding.setSurfaceSize(null));
+  final controller = FilmLibraryController(state);
+  addTearDown(controller.dispose);
+  addTearDown(state.dispose);
   await tester.pumpWidget(
     MaterialApp(
       debugShowCheckedModeBanner: false,
@@ -112,7 +112,7 @@ Future<void> pumpShelf(
             .copyWith(textScaler: TextScaler.linear(scale)),
         child: child!,
       ),
-      home: HomeScreen(state: state),
+      home: LibraryScreen(controller: controller),
     ),
   );
   await tester.pumpAndSettle();
@@ -135,15 +135,12 @@ void main() {
     // These font-loaded baselines were captured on Windows. Keep exact
     // comparisons on that host; both CI and releases run the golden job.
     testWidgets(
-      'home, edit, settings, stats and import in $mode',
+      'edit, settings, stats and import in $mode',
       (tester) async {
         final state = await sampleState();
         await pumpShelf(tester, state, brightness: brightness);
-        await expectLater(
-          find.byType(MaterialApp),
-          matchesGoldenFile('goldens/home_$mode.png'),
-        );
-        final context = tester.element(find.byType(HomeScreen));
+        // The four-section goldens cover the current library screen.
+        final context = tester.element(find.byType(LibraryScreen));
         showEditSheet(context, initial: state.entries.first, state: state);
         await tester.pumpAndSettle();
         await expectLater(
@@ -197,9 +194,17 @@ void main() {
   ) async {
     final state = await sampleState();
     await pumpShelf(tester, state);
-    await tester.tap(find.text('Time & filters'));
+    await tester.tap(find.text('Filters'));
     await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField).first, '100');
+    await tester.enterText(
+      find
+          .descendant(
+            of: find.byType(BottomSheet),
+            matching: find.byType(TextField),
+          )
+          .first,
+      '100',
+    );
     await tester.scrollUntilVisible(
       find.text('Apply filters'),
       180,
@@ -208,25 +213,33 @@ void main() {
     await tester.tap(find.text('Apply filters'));
     await tester.pumpAndSettle();
     expect(find.text('Heat'), findsNothing);
-    expect(find.textContaining('2 episodes fit'), findsOneWidget);
+    expect(find.text('14 / 45 episodes'), findsOneWidget);
+    await tester.enterText(find.byType(TextField), 'robot');
+    await tester.pumpAndSettle();
+    expect(find.text('Mr. Robot'), findsOneWidget);
+    await tester.tap(find.byTooltip('Film tools'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Pick for me'));
     await tester.pumpAndSettle();
     expect(find.text('Open title'), findsOneWidget);
-    await tester.tap(find.text('Pick again'));
+    await tester.tap(find.text('Close'));
     await tester.pumpAndSettle();
-    Navigator.of(tester.element(find.byType(AlertDialog))).pop();
+    await tester.tap(find.byTooltip('Actions for Mr. Robot'));
     await tester.pumpAndSettle();
-    await tester.longPress(find.text('Mr. Robot'));
-    await tester.pumpAndSettle();
-    expect(find.text('1 selected'), findsOneWidget);
-    await tester.tap(find.byTooltip('Bulk actions'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Move to trash'));
+    await tester.tap(find.text('Delete title'));
     await tester.pumpAndSettle();
     expect(state.entries.any((e) => e.id == 'robot'), isFalse);
     await tester.tap(find.text('Undo'));
     await tester.pumpAndSettle();
     expect(state.entries.any((e) => e.id == 'robot'), isTrue);
+    await tester.longPress(find.text('Mr. Robot'));
+    await tester.pumpAndSettle();
+    expect(find.text('1 selected'), findsOneWidget);
+    await tester.tap(find.byTooltip('Bulk actions'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete selected'));
+    await tester.pumpAndSettle();
+    expect(state.entries.any((e) => e.id == 'robot'), isFalse);
   });
 
   testWidgets('duplicate warning preserves the editor and can be cancelled', (
@@ -234,7 +247,7 @@ void main() {
   ) async {
     final state = await sampleState();
     await pumpShelf(tester, state);
-    final context = tester.element(find.byType(HomeScreen));
+    final context = tester.element(find.byType(LibraryScreen));
     final duplicate = state.entries[1].copy()..id = 'another';
     showEditSheet(context, initial: duplicate, state: state);
     await tester.pumpAndSettle();
@@ -253,9 +266,17 @@ void main() {
     (tester) async {
       final state = await sampleState();
       await pumpShelf(tester, state, width: 360, scale: 1.6);
-      await tester.tap(find.text('Time & filters'));
+      await tester.tap(find.text('Filters'));
       await tester.pumpAndSettle();
-      await tester.enterText(find.byType(TextField).first, '100');
+      await tester.enterText(
+        find
+            .descendant(
+              of: find.byType(BottomSheet),
+              matching: find.byType(TextField),
+            )
+            .first,
+        '100',
+      );
       await tester.scrollUntilVisible(
         find.text('Apply filters'),
         200,
@@ -263,12 +284,21 @@ void main() {
       );
       await tester.tap(find.text('Apply filters'));
       await tester.pumpAndSettle();
-      expect(find.text('100 min · filters'), findsOneWidget);
+      expect(find.text('Filters on'), findsOneWidget);
+      expect(find.text('Clear filters'), findsOneWidget);
       expect(tester.takeException(), isNull);
-      final context = tester.element(find.byType(HomeScreen));
+      final context = tester.element(find.byType(LibraryScreen));
       showEditSheet(context, initial: state.entries.first, state: state);
       await tester.pumpAndSettle();
-      await tester.enterText(find.byType(TextField).at(2), '-2');
+      await tester.enterText(
+        find
+            .descendant(
+              of: find.byType(BottomSheet),
+              matching: find.byType(TextField),
+            )
+            .at(2),
+        '-2',
+      );
       await tester.scrollUntilVisible(
         find.text('Save changes'),
         300,

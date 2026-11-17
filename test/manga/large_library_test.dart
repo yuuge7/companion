@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:companion/core/library.dart';
 import 'package:companion/manga/app_state.dart';
 import 'package:companion/manga/csv_export.dart';
+import 'package:companion/manga/library_controller.dart';
 import 'package:companion/manga/models/manga_entry.dart';
-import 'package:companion/manga/screens/home_screen.dart';
 import 'package:companion/manga/stats.dart';
 import 'package:companion/manga/storage.dart';
 import 'package:companion/manga/theme.dart';
@@ -134,10 +135,12 @@ void main() {
   });
 
   testWidgets('the shelf scrolls and searches smoothly', (tester) async {
+    final controller = MangaLibraryController(state);
+    addTearDown(controller.dispose);
     await tester.pumpWidget(
       MaterialApp(
         theme: buildTheme(Brightness.light),
-        home: HomeScreen(state: state),
+        home: LibraryScreen(controller: controller),
       ),
     );
     await tester.pump();
@@ -154,8 +157,6 @@ void main() {
     // Debug-mode frames run many times slower than a release build.
     expect(sw.elapsed, lessThan(budget * 15));
 
-    await tester.tap(find.byTooltip('Search your shelf'));
-    await tester.pump();
     await tester.enterText(find.byType(TextField), 'number 4');
     await tester.pump();
     expect(tester.takeException(), isNull);

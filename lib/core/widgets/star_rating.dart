@@ -9,7 +9,7 @@ class SharedStarRating extends StatelessWidget {
     this.filledColor,
     this.emptyColor,
   });
-  final int value;
+  final num value;
   final ValueChanged<int>? onChanged;
   final double size;
   final Color? filledColor, emptyColor;
@@ -35,9 +35,13 @@ class SharedStarRating extends StatelessWidget {
                 width: 44,
                 height: 44,
                 child: Icon(
-                  n <= value ? Icons.star_rounded : Icons.star_outline_rounded,
+                  n <= value
+                      ? Icons.star_rounded
+                      : n - .5 <= value
+                      ? Icons.star_half_rounded
+                      : Icons.star_outline_rounded,
                   size: size,
-                  color: n <= value
+                  color: n - .5 <= value
                       ? filledColor ?? Theme.of(context).colorScheme.onSurface
                       : emptyColor ?? Theme.of(context).dividerColor,
                 ),

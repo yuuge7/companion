@@ -21,12 +21,15 @@ All sections use one palette, typography, form controls and navigation theme. Ma
 | Books | Pages, audiobook listening time, editions, reads/rereads, quotes and reading sessions | Existing `.bcbackup`, legacy/schema-2 book JSON, Goodreads CSV | `.bcbackup` with covers, book JSON, CSV, HTML, PDF |
 | Manga | Chapters, rereads and reading events | Existing manga JSON, MyAnimeList **manga** XML, Anime-Planet **manga** JSON, Mihon/Tachiyomi backups | Existing manga JSON array, manga CSV |
 | Film | Movie minutes, series episodes/seasons and viewing logs | Existing Screen Companion schema-2 JSON and legacy film arrays | Existing film JSON, film CSV |
-| Anime | TV/OVA/ONA/special episodes, anime-movie minutes, studio/release season, rewatches and progress history | Anime Companion schema-1 JSON, MyAnimeList **anime** XML, including gzip | Anime JSON, anime CSV |
+| Anime | TV/OVA/ONA/special episodes, anime-movie minutes, studio/release season, rewatches and progress history | Anime Companion schema-1 JSON, Anime-Planet **anime** JSON, MyAnimeList **anime** XML, including gzip | Anime JSON, anime CSV |
 
 CSV is a report for Manga, Film and Anime; use their JSON for a complete reimportable backup.
 Books' complete backup also includes cover image bytes.
 Anime JSON preserves notes, tags, ratings, release metadata, URLs, date precision and progress events.
 MyAnimeList's 0–10 score is mapped to the shared five-star scale on anime import.
+Anime ratings retain half stars. Anime-Planet's six anime statuses, watched episodes,
+watch counts and date precision are preserved. Format, episode totals and runtime stay
+unspecified when absent from its export. See [Anime-Planet import](docs/anime-planet-import.md).
 
 There is **no universal import/export format, cross-type library, combined progress total or automatic conversion between sections**.
 Recognizable foreign records and backup envelopes are rejected before importing.

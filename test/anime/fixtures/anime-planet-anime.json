@@ -1,0 +1,12 @@
+{
+  "user": {"name": "fixture-user"},
+  "export": {"version": "1.0"},
+  "entries": [
+    {"name": "Watching & learning", "status": "watching", "eps": 14, "rating": 4.5, "times": 2, "started": "2023-09-00 00:00:00", "completed": null},
+    {"name": "Finished", "status": "watched", "eps": 26, "rating": 5, "times": 1, "started": "2021-01-10 00:00:00", "completed": "2021-05-01 00:00:00"},
+    {"name": "Later", "status": "want to watch", "eps": 0, "rating": null, "times": 0, "started": null, "completed": null},
+    {"name": "Paused", "status": "stalled", "eps": "3", "rating": "2.5", "times": 0, "started": "2022-00-00", "completed": "0000-00-00"},
+    {"name": "Stopped", "status": "dropped", "eps": 2, "rating": 1, "times": 0},
+    {"name": "Never", "status": "won't watch", "eps": 0, "rating": 0, "times": 0}
+  ]
+}

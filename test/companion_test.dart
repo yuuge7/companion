@@ -30,12 +30,7 @@ void main() {
       ('sans-serif-condensed', ['Oswald-Medium.ttf', 'Oswald-SemiBold.ttf']),
       ('monospace', ['DMMono-Regular.ttf', 'DMMono-Medium.ttf']),
       ('Marquee', ['Oswald-Medium.ttf', 'Oswald-SemiBold.ttf']),
-      (
-        'Grotesk',
-        ['Archivo-Regular.ttf', 'Archivo-Medium.ttf', 'Archivo-SemiBold.ttf'],
-      ),
       ('Readout', ['DMMono-Regular.ttf', 'DMMono-Medium.ttf']),
-      ('PlexSerif', ['IBMPlexSerif-Medium.ttf', 'IBMPlexSerif-SemiBold.ttf']),
       (
         'PlexSans',
         [

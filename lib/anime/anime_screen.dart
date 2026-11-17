@@ -16,7 +16,7 @@ class _AnimeEditorState extends State<AnimeEditor> {
   final Map<String, TextEditingController> _fields = {};
   late AnimeFormat _format;
   late AnimeStatus _status;
-  late int _rating;
+  late double _rating;
   @override
   void initState() {
     super.initState();
@@ -188,7 +188,7 @@ class _AnimeEditorState extends State<AnimeEditor> {
           const Text('Rating'),
           SharedStarRating(
             value: _rating,
-            onChanged: (value) => setState(() => _rating = value),
+            onChanged: (value) => setState(() => _rating = value.toDouble()),
           ),
           const SizedBox(height: 16),
           _field('tags', 'Tags, separated by commas'),
@@ -218,11 +218,9 @@ class AnimeImportPreview extends StatelessWidget {
   final List<AnimeEntry> incoming, existing;
   @override
   Widget build(BuildContext context) {
-    final byId = {for (final e in existing) e.id: e};
-    final byIdentity = {for (final e in existing) e.identity: e};
     var added = 0, updated = 0, kept = 0;
     for (final e in incoming) {
-      final old = byId[e.id] ?? byIdentity[e.identity];
+      final old = e.importMatch(existing);
       if (old == null) {
         added++;
       } else if (e.updatedAt > old.updatedAt) {

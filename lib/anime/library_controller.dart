@@ -255,7 +255,7 @@ class AnimeLibraryController extends LibraryController {
           (context) => _export(context, true),
         ),
       ],
-      description: 'Anime Companion JSON or MyAnimeList anime XML, including gzip. JSON is the complete anime backup.',
+      description: 'Anime Companion JSON, Anime-Planet anime JSON or MyAnimeList anime XML, including gzip. JSON is the complete anime backup.',
     ),
   );
   @override

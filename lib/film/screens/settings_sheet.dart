@@ -9,7 +9,7 @@ import '../android_services.dart';
 import '../diagnostics.dart';
 import 'import_sheet.dart';
 import 'trash_sheet.dart';
-import '../file_export.dart';
+import '../../core/file_export.dart';
 import '../format.dart';
 import '../storage.dart';
 import '../theme.dart';

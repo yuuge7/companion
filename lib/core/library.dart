@@ -550,7 +550,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
 Future<void> showLibraryRating(
   BuildContext context,
-  int value,
+  num value,
   Future<void> Function(int) save,
 ) async {
   final next = await showDialog<int>(
