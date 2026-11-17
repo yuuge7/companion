@@ -1,0 +1,5 @@
+<resources>
+    <string name="widget_description">The shortest sitting on your watchlist, with your next episode.</string>
+    <color name="widget_ground">#E7E3E4</color><color name="widget_ink">#1B171C</color>
+    <color name="widget_muted">#4E4753</color><color name="widget_accent">#31408C</color>
+</resources>
