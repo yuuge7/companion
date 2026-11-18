@@ -206,6 +206,17 @@ In **Settings → Secrets and variables → Actions**, create these repository s
 | `ANDROID_KEY_ALIAS` | `keyAlias` in `signing-secrets.properties` (`companion`) |
 | `ANDROID_KEY_PASSWORD` | `keyPassword` in `signing-secrets.properties` |
 
+Copy only each property's value, without the `keyPassword=` / `storePassword=`
+prefix or surrounding quotes. The store and private-key passwords are separate
+and can differ. `python scripts/signing.py configure` checks both passwords before
+refreshing the local configuration and base64 export.
+
+If signing fails with `UnrecoverableKeyException` or `Cannot recover key`, update
+`ANDROID_KEY_PASSWORD` from the original file's `keyPassword` value, then rerun the
+failed **Companion release** workflow. Exporting the certificate can succeed with
+the store password even when the private-key password is wrong. Signing failures
+include the failed tool operation and diagnostics with the signing secrets redacted.
+
 Enable GitHub Actions and allow the actions used by the workflows. The publishing
 workflow requests `contents: write` for releases/tags and `actions: read` for the
 build artifact; no personal token is needed for ordinary code changes.

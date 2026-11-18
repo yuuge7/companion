@@ -16,6 +16,12 @@ KEYSTORE = ROOT / 'companion-release.jks'
 PRIVATE_CONFIG = ROOT / 'signing-secrets.properties'
 ANDROID_CONFIG = ROOT / 'android/key.properties'
 BASE64_EXPORT = ROOT / 'companion-release.jks.base64'
+CI_SECRETS = ('ANDROID_KEYSTORE_BASE64', 'ANDROID_KEYSTORE_PASSWORD',
+              'ANDROID_KEY_ALIAS', 'ANDROID_KEY_PASSWORD')
+
+
+class SigningToolError(ValueError):
+    """A failed signing operation with diagnostics safe to write to CI logs."""
 
 
 def keytool():
@@ -30,8 +36,22 @@ def keytool():
 
 
 def run(arguments, env=None):
-    # Signing commands never include passwords in their arguments or output.
-    return subprocess.run(arguments, env=env, check=True, capture_output=True).stdout
+    # Passwords stay in the environment. Tool failures must also redact them:
+    # keytool writes some errors to stdout, while apksigner uses stderr.
+    environment = os.environ if env is None else env
+    try:
+        return subprocess.run(arguments, env=env, check=True, capture_output=True).stdout
+    except subprocess.CalledProcessError as error:
+        details = '\n'.join(output.decode('utf-8', errors='replace').strip()
+                            for output in (error.stdout, error.stderr) if output)
+        for secret in sorted({environment.get(name, '') for name in CI_SECRETS}, key=len, reverse=True):
+            if secret:
+                details = details.replace(secret, '[REDACTED]')
+        operation = f'{Path(arguments[0]).stem} {arguments[1]}'
+        message = f'{operation} failed (exit {error.returncode}).'
+        if details:
+            message += '\n' + details[:6000]
+        raise SigningToolError(message) from None
 
 
 def load_properties(file):
@@ -54,11 +74,21 @@ def fingerprint(keystore, alias, env):
     return hashlib.sha256(certificate).hexdigest()
 
 
+def verify_private_key(keystore, alias, env):
+    # Exporting the certificate checks only the store password. Signing a CSR
+    # also proves the separate private-key password works, without changing JKS.
+    run([keytool(), '-certreq', '-keystore', str(keystore), '-alias', alias,
+         '-storepass:env', 'ANDROID_KEYSTORE_PASSWORD',
+         '-keypass:env', 'ANDROID_KEY_PASSWORD'], env)
+
+
 def configure():
     if not KEYSTORE.is_file() or not PRIVATE_CONFIG.is_file():
         raise ValueError('Restore companion-release.jks and signing-secrets.properties to the project root first.')
     config = load_properties(PRIVATE_CONFIG)
-    expected = fingerprint(KEYSTORE, config['keyAlias'], signing_env(config))
+    env = signing_env(config)
+    expected = fingerprint(KEYSTORE, config['keyAlias'], env)
+    verify_private_key(KEYSTORE, config['keyAlias'], env)
     config['storeFile'] = KEYSTORE.name
     ANDROID_CONFIG.write_text(properties_text(config), encoding='utf-8')
     BASE64_EXPORT.write_text(base64.b64encode(KEYSTORE.read_bytes()).decode('ascii'), encoding='ascii')
@@ -109,8 +139,7 @@ def verify_signed_apk(apk, expected):
 
 
 def sign_ci(apk, destination):
-    names = ('ANDROID_KEYSTORE_BASE64', 'ANDROID_KEYSTORE_PASSWORD', 'ANDROID_KEY_ALIAS', 'ANDROID_KEY_PASSWORD')
-    missing = [name for name in names if not os.environ.get(name)]
+    missing = [name for name in CI_SECRETS if not os.environ.get(name)]
     if missing:
         raise ValueError('Configure repository Actions secrets: ' + ', '.join(missing))
     validate_apk(apk, os.environ['RELEASE_VERSION_NAME'], os.environ['RELEASE_VERSION_CODE'])
@@ -118,17 +147,34 @@ def sign_ci(apk, destination):
     if destination.exists():
         raise ValueError('Output APK already exists; refusing to overwrite it.')
     encoded = ''.join(os.environ['ANDROID_KEYSTORE_BASE64'].split())
-    key_bytes = base64.b64decode(encoded, validate=True)
+    try:
+        key_bytes = base64.b64decode(encoded, validate=True)
+    except ValueError:
+        raise ValueError('ANDROID_KEYSTORE_BASE64 must contain only the contents of '
+                         'companion-release.jks.base64.') from None
     with tempfile.TemporaryDirectory(prefix='companion-signing-', dir=os.environ.get('RUNNER_TEMP')) as temporary:
         keystore = Path(temporary) / KEYSTORE.name
         keystore.write_bytes(key_bytes)
         alias = os.environ['ANDROID_KEY_ALIAS']
-        expected = fingerprint(keystore, alias, os.environ)
+        try:
+            expected = fingerprint(keystore, alias, os.environ)
+        except SigningToolError as error:
+            raise ValueError('Could not open the release certificate. Check ANDROID_KEYSTORE_BASE64, '
+                             'ANDROID_KEYSTORE_PASSWORD (storePassword) and ANDROID_KEY_ALIAS (keyAlias) '
+                             'against the original local signing files.\n' + str(error)) from None
         signer = android_tool('apksigner')
         signed_apk = Path(temporary) / 'signed.apk'
-        run([signer, 'sign', '--ks', str(keystore), '--ks-key-alias', alias,
-             '--ks-pass', 'env:ANDROID_KEYSTORE_PASSWORD', '--key-pass', 'env:ANDROID_KEY_PASSWORD',
-             '--v4-signing-enabled', 'false', '--out', str(signed_apk), str(apk)])
+        try:
+            run([signer, 'sign', '--ks', str(keystore), '--ks-key-alias', alias,
+                 '--ks-pass', 'env:ANDROID_KEYSTORE_PASSWORD', '--key-pass', 'env:ANDROID_KEY_PASSWORD',
+                 '--v4-signing-enabled', 'false', '--out', str(signed_apk), str(apk)])
+        except SigningToolError as error:
+            if 'UnrecoverableKeyException' in str(error) or 'Cannot recover key' in str(error):
+                raise ValueError('ANDROID_KEY_PASSWORD does not unlock the release private key. '
+                                 'Set that Actions secret to only the keyPassword value from '
+                                 'signing-secrets.properties, without the keyPassword= prefix or quotes. '
+                                 'It can differ from ANDROID_KEYSTORE_PASSWORD.\n' + str(error)) from None
+            raise
         verify_signed_apk(signed_apk, expected)
         with signed_apk.open('rb') as source, destination.open('xb') as target:
             shutil.copyfileobj(source, target)
@@ -145,9 +191,6 @@ if __name__ == '__main__':
             sign_ci(Path(sys.argv[2]), Path(sys.argv[3]))
         else:
             raise ValueError('Usage: python scripts/signing.py generate | configure | sign-ci INPUT.apk OUTPUT.apk')
-    except subprocess.CalledProcessError as error:
-        print(f'Signing tool failed (exit {error.returncode}). Check the keystore, alias and passwords.', file=sys.stderr)
-        sys.exit(1)
-    except (ValueError, KeyError) as error:
+    except (ValueError, KeyError, OSError) as error:
         print(str(error), file=sys.stderr)
         sys.exit(1)
