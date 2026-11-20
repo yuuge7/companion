@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
@@ -25,6 +27,73 @@ class AppState extends ChangeNotifier {
   AppState(this._store) : entries = _store.load() {
     _recoveredOnLoad = _store.recovered;
   }
+  Future<void> settle() => _store.settle();
+
+  Map<String, dynamic> companionState() => {
+    'entries': entries.map((e) => e.toJson()).toList(),
+    'trash': _store.trash.map((e) => e.toJson()).toList(),
+    'snapshot': _store.snapshot?.map((e) => e.toJson()).toList(),
+    'snapshotAt': _store.snapshotAt,
+  };
+
+  static void validateCompanionState(Map<String, dynamic> state) {
+    void validateRows(List rows) {
+      final ids = <String>{};
+      for (final row in rows) {
+        if (row is! Map ||
+            row['id'] is! String ||
+            (row['id'] as String).trim().isEmpty ||
+            !ids.add(row['id'] as String) ||
+            row['title'] is! String ||
+            (row['title'] as String).trim().isEmpty) {
+          throw const FormatException('Invalid or duplicate film entry.');
+        }
+        ShelfEntry.fromJson(Map<String, dynamic>.from(row));
+      }
+    }
+
+    validateRows(state['entries'] as List);
+    for (final row in state['trash'] as List) {
+      ShelfEntry.fromJson(Map<String, dynamic>.from(row['entry'] as Map));
+      if (row['deletedAt'] is! int) {
+        throw const FormatException('Invalid trash date.');
+      }
+    }
+    validateRows(state['snapshot'] as List? ?? []);
+    if (state['snapshotAt'] != null && state['snapshotAt'] is! int) {
+      throw const FormatException('Invalid snapshot date.');
+    }
+  }
+
+  Future<void> restoreCompanion(Map<String, dynamic> state) async {
+    validateCompanionState(state);
+    if (loadFailed && _store.directory != null) {
+      final damaged = File('${_store.directory!.path}/shelf-v2.json');
+      if (await damaged.exists()) {
+        await damaged.copy(
+          '${damaged.path}.damaged-${DateTime.now().millisecondsSinceEpoch}',
+        );
+      }
+    }
+    entries = (state['entries'] as List)
+        .map((e) => ShelfEntry.fromJson(Map<String, dynamic>.from(e)))
+        .toList();
+    _store.trash = (state['trash'] as List)
+        .map(
+          (e) => TrashEntry(
+            ShelfEntry.fromJson(Map<String, dynamic>.from(e['entry'])),
+            e['deletedAt'] as int,
+          ),
+        )
+        .toList();
+    _store.snapshot = (state['snapshot'] as List?)
+        ?.map((e) => ShelfEntry.fromJson(Map<String, dynamic>.from(e)))
+        .toList();
+    _store.snapshotAt = state['snapshotAt'] as int?;
+    await _persist(recovery: true);
+    _store.loadFailed = false;
+  }
+
   bool get recovered => _recoveredOnLoad;
   List<TrashEntry> get trash =>
       _store.trash.where((t) => t.daysLeft > 0).toList();
@@ -179,6 +248,11 @@ class AppState extends ChangeNotifier {
     final total = entry.episodes;
     if (dir > 0 && total != null && entry.watched >= total) return;
 
+    entry.episodeHistory.add({
+      'at': DateTime.now().millisecondsSinceEpoch,
+      'from': entry.watched,
+      'to': entry.watched + dir,
+    });
     entry.watched += dir;
     HapticFeedback.selectionClick();
     entry.lastUpdated = DateTime.now().millisecondsSinceEpoch;

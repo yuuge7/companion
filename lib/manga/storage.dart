@@ -21,6 +21,13 @@ class MangaStore {
   /// shows a recovery state for this instead of pretending the shelf is
   /// empty.
   bool loadFailed = false;
+  Future<void> _writes = Future.value();
+  Future<void> settle() => _writes;
+  Future<void> _write(Future<void> Function() action) {
+    final result = _writes.then((_) => action());
+    _writes = result.catchError((Object _) {});
+    return result;
+  }
 
   static Future<MangaStore> open() async =>
       MangaStore(await SharedPreferences.getInstance());
@@ -49,21 +56,38 @@ class MangaStore {
   /// Re-reads from disk, dropping the in-memory cache. Needed after the
   /// home screen widget writes to the same store.
   Future<List<MangaEntry>> reload() async {
+    await settle();
     await _prefs.reload();
     return load();
   }
 
-  Future<void> save(List<MangaEntry> entries) async {
-    await _prefs.setString(
-      key,
-      jsonEncode(entries.map((e) => e.toJson()).toList()),
-    );
+  Future<void> save(List<MangaEntry> entries) {
+    final raw = jsonEncode(entries.map((e) => e.toJson()).toList());
+    return _write(() async {
+      if (loadFailed) {
+        final damaged = _prefs.getString(key);
+        if (damaged != null &&
+            !await _prefs.setString(
+              '$key-damaged-${DateTime.now().millisecondsSinceEpoch}',
+              damaged,
+            )) {
+          throw StateError('Could not preserve damaged manga data.');
+        }
+      }
+      if (!await _prefs.setString(key, raw)) {
+        throw StateError('Manga could not be saved.');
+      }
+    });
   }
 
   /// Name of the last chosen sort, or null if none was ever picked.
   String? loadSortMode() => _prefs.getString(sortKey);
 
-  Future<void> saveSortMode(String name) => _prefs.setString(sortKey, name);
+  Future<void> saveSortMode(String name) => _write(() async {
+    if (!await _prefs.setString(sortKey, name)) {
+      throw StateError('Manga sort could not be saved.');
+    }
+  });
 
   /// Returns null when the file is not a JSON array of entries.
   static List<MangaEntry>? parseExport(String raw) {

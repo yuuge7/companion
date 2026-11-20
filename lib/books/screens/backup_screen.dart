@@ -69,6 +69,7 @@ class _BackupScreenState extends State<BackupScreen> {
     var mode = ImportMode.merge;
     final confirmed = await showDialog<bool>(
       context: context,
+      useRootNavigator: false,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, update) {
           final preview = library.preview(data, mode);

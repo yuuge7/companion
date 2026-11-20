@@ -1,4 +1,5 @@
-import 'package:file_selector/file_selector.dart';
+import '../core/import_picker.dart';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -195,20 +196,7 @@ class AnimeLibraryController extends LibraryController {
 
   Future<void> _import(BuildContext context) async {
     try {
-      final file = await openFile(
-        acceptedTypeGroups: [
-          const XTypeGroup(
-            label: 'Anime backup',
-            extensions: ['json', 'xml', 'gz'],
-            mimeTypes: [
-              'application/json',
-              'text/xml',
-              'application/xml',
-              'application/gzip',
-            ],
-          ),
-        ],
-      );
+      final file = await pickLibraryImport();
       if (file == null) return;
       if (await file.length() > AnimeBackup.maxBytes) {
         throw const FormatException('Anime imports are limited to 10 MB.');
@@ -255,7 +243,7 @@ class AnimeLibraryController extends LibraryController {
           (context) => _export(context, true),
         ),
       ],
-      description: 'Anime Companion JSON, Anime-Planet anime JSON or MyAnimeList anime XML, including gzip. JSON is the complete anime backup.',
+      description: 'Anime Companion JSON, Anime-Planet anime JSON/HTML or MyAnimeList anime XML, including gzip. JSON is the complete anime backup.',
     ),
   );
   @override
@@ -310,7 +298,9 @@ class AnimeLibraryController extends LibraryController {
         .where(
           (entry) =>
               (query.shelf == 'all' || entry.status.name == query.shelf) &&
-              (_format == null || entry.animeFormat == _format) &&
+              (query.ignoreFilters ||
+                  _format == null ||
+                  entry.animeFormat == _format) &&
               [
                 entry.title,
                 entry.studio,

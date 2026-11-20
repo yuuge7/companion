@@ -1,4 +1,5 @@
-import 'package:file_selector/file_selector.dart';
+import '../core/import_picker.dart';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
@@ -28,27 +29,15 @@ Future<ImportOutcome?> pickAndImport(
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
-  final picked = await openFile(
-    acceptedTypeGroups: [
-      const XTypeGroup(
-        label: 'Backups and exports',
-        extensions: ['json', 'xml', 'gz', 'tachibk', 'proto'],
-        mimeTypes: [
-          'application/json',
-          'application/xml',
-          'text/xml',
-          'application/gzip',
-          'application/x-gzip',
-          'application/octet-stream',
-        ],
-      ),
-      const XTypeGroup(label: 'Any file'),
-    ],
-  );
+  final picked = await pickLibraryImport();
   if (picked == null) return null;
 
   ParsedBackup? backup;
   try {
+    if (await picked.length() > 100 * 1024 * 1024) {
+      snack('Manga imports are limited to 100 MB.');
+      return null;
+    }
     // Mihon backups run to megabytes; parse off the UI thread.
     backup = await compute(parseBackupFile, await picked.readAsBytes());
   } catch (_) {

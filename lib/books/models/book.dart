@@ -1,3 +1,4 @@
+import '../../core/physical_collection.dart';
 import 'reading_session.dart';
 import 'book_format.dart';
 export 'book_format.dart';
@@ -32,6 +33,7 @@ class Book {
     required this.id,
     required this.title,
     this.author = '',
+    this.collection = const PhysicalCollection(),
     this.coverImagePath,
     this.status = BookStatus.toRead,
     this.totalPages,
@@ -80,6 +82,7 @@ class Book {
       seriesNumber,
       notes,
       dropReason;
+  final PhysicalCollection collection;
   final String? coverImagePath;
   final BookStatus status;
   final BookFormat format;
@@ -143,6 +146,7 @@ class Book {
   Book copyWith({
     String? title,
     String? author,
+    PhysicalCollection? collection,
     Object? coverImagePath = unset,
     BookStatus? status,
     Object? totalPages = unset,
@@ -166,6 +170,7 @@ class Book {
     id: id,
     title: title ?? this.title,
     author: author ?? this.author,
+    collection: collection ?? this.collection,
     coverImagePath: identical(coverImagePath, unset)
         ? this.coverImagePath
         : coverImagePath as String?,
@@ -199,6 +204,7 @@ class Book {
     'id': id,
     'title': title,
     'author': author,
+    'collection': collection.toJson(),
     'coverImagePath': coverImagePath,
     'status': status.name,
     'totalPages': totalPages,
@@ -224,6 +230,7 @@ class Book {
     id: json['id'] as String,
     title: json['title'] as String,
     author: json['author'] as String? ?? '',
+    collection: PhysicalCollection.fromJson(json['collection']),
     coverImagePath: json['coverImagePath'] as String?,
     status: BookStatus.values.byName(json['status'] as String? ?? 'toRead'),
     totalPages: json['totalPages'] as int?,

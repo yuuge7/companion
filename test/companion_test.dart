@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:companion/main.dart';
@@ -369,5 +371,226 @@ void main() {
       await tester.pumpWidget(const SizedBox());
     },
     tags: ['golden'],
+  );
+
+  Future<void> waitForImportPreview(WidgetTester tester, String title) async {
+    final timer = Stopwatch()..start();
+    while (find.text(title).evaluate().isEmpty &&
+        timer.elapsed < const Duration(seconds: 10)) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+      );
+      await tester.pump();
+    }
+    await tester.pumpAndSettle();
+    expect(find.text(title), findsOneWidget);
+  }
+
+  Future<void> importPage(WidgetTester tester, String label) async {
+    await select(tester, label);
+    await tester.tap(find.byTooltip('$label tools'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Import & export'));
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets(
+    'manga and anime imports leave every tab interactive without restart',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(CompanionApp(dependencies: deps));
+      await tester.pumpAndSettle();
+      for (final label in ['Books', 'Manga', 'Film', 'Anime']) {
+        await select(tester, label);
+      }
+      final channel = const MethodChannel('plugins.flutter.io/file_selector');
+      String? path;
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+            expect(call.method, 'openFile');
+            expect(call.arguments['acceptedTypeGroups'], isEmpty);
+            return [path!];
+          });
+      addTearDown(
+        () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(channel, null),
+      );
+      final files = await tester.runAsync(() async {
+        final mangaFile = File('${directory.path}/export-manga-test.html');
+        await mangaFile.writeAsString(
+          '<html><pre>${const HtmlEscape().convert(jsonEncode({
+            'entries': [
+              {'name': 'Imported manga', 'status': 'reading', 'ch': 12, 'rating': 4},
+            ],
+          }))}</pre></html>',
+        );
+        final animeFile = File('${directory.path}/export-anime-test.json');
+        await animeFile.writeAsString(
+          jsonEncode({
+            'export': {'type': 'anime'},
+            'entries': [
+              {
+                'name': 'Imported anime',
+                'status': 'watching',
+                'eps': 7,
+                'rating': 4.5,
+              },
+            ],
+          }),
+        );
+        return [mangaFile.path, animeFile.path];
+      });
+      const fullManga = String.fromEnvironment('TEST_MANGA_EXPORT');
+      const fullAnime = String.fromEnvironment('TEST_ANIME_EXPORT');
+      if (fullManga.isNotEmpty) files![0] = fullManga;
+      if (fullAnime.isNotEmpty) files![1] = fullAnime;
+      for (var index = 0; index < 2; index++) {
+        final label = index == 0 ? 'Manga' : 'Anime';
+        path = files![index];
+        await importPage(tester, label);
+        await tester.runAsync(() async {
+          await tester.tap(find.text('Import backup'));
+        });
+        await waitForImportPreview(
+          tester,
+          index == 0 ? 'Import from Anime-Planet?' : 'Preview anime import',
+        );
+        await tester.runAsync(() async {
+          await tester.tap(
+            find.text(index == 0 ? 'Merge' : 'Merge anime library'),
+          );
+          await Future<void>.delayed(const Duration(milliseconds: 50));
+          if (index == 0) {
+            await deps.manga.settle();
+          } else {
+            await deps.anime.settle();
+          }
+        });
+        await tester.pumpAndSettle();
+        await tester.pageBack();
+        await tester.pumpAndSettle();
+        for (final other in ['Books', 'Manga', 'Film', 'Anime']) {
+          await select(tester, other);
+          await tester.enterText(
+            find.byKey(const ValueKey('library-search')),
+            'does not match',
+          );
+          await tester.pumpAndSettle();
+          expect(find.text('No matching titles'), findsOneWidget);
+          await tester.tap(find.byTooltip('Clear search'));
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('Add title'));
+          await tester.pumpAndSettle();
+          expect(
+            find.text(
+              other == 'Books'
+                  ? 'Add book'
+                  : other == 'Manga'
+                  ? 'Add manga'
+                  : other == 'Anime'
+                  ? 'Add anime'
+                  : 'Add film or series',
+            ),
+            findsOneWidget,
+          );
+          await tester.pageBack();
+          await tester.pumpAndSettle();
+          expect(tester.takeException(), isNull);
+        }
+      }
+      if (fullManga.isEmpty) {
+        expect(
+          deps.manga.entries.map((e) => e.title),
+          contains('Imported manga'),
+        );
+      } else {
+        expect(deps.manga.entries.length, greaterThanOrEqualTo(189));
+      }
+      if (fullAnime.isEmpty) {
+        expect(
+          deps.anime.entries.map((e) => e.title),
+          contains('Imported anime'),
+        );
+      } else {
+        expect(deps.anime.entries.length, greaterThanOrEqualTo(530));
+      }
+      expect(deps.books.books.single.title, 'The Left Hand of Darkness');
+      expect(deps.film.entries.single.title, 'Arrival');
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+
+  testWidgets(
+    'a delayed import preview stays in its own library when tabs change',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final file = File('${directory.path}/export-manga-delayed.json');
+      await tester.runAsync(
+        () => file.writeAsString(
+          jsonEncode({
+            'entries': [
+              {'name': 'Delayed manga', 'status': 'reading', 'ch': 2},
+            ],
+          }),
+        ),
+      );
+      final picked = Completer<List<String>>();
+      const channel = MethodChannel('plugins.flutter.io/file_selector');
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (_) => picked.future);
+      addTearDown(
+        () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(channel, null),
+      );
+      await tester.pumpWidget(CompanionApp(dependencies: deps));
+      await tester.pumpAndSettle();
+      await importPage(tester, 'Manga');
+      await tester.runAsync(() => tester.tap(find.text('Import backup')));
+      await tester.pumpAndSettle();
+      await select(tester, 'Film');
+      await tester.runAsync(() async {
+        picked.complete([file.path]);
+        await Future<void>.delayed(const Duration(milliseconds: 400));
+      });
+      await tester.pumpAndSettle();
+      expect(find.text('Arrival'), findsOneWidget);
+      expect(find.text('Import from Anime-Planet?'), findsNothing);
+      await tester.tap(find.text('Add title'));
+      await tester.pumpAndSettle();
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      await select(tester, 'Manga');
+      expect(find.text('Import from Anime-Planet?'), findsOneWidget);
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+
+  testWidgets(
+    'changing tabs releases text focus so hidden keyboards cannot break other layouts',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(320, 760));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(CompanionApp(dependencies: deps));
+      await tester.pumpAndSettle();
+      await select(tester, 'Manga');
+      await tester.enterText(
+        find.byKey(const ValueKey('library-search')),
+        'Witch',
+      );
+      final focus = tester
+          .widget<EditableText>(find.byType(EditableText))
+          .focusNode;
+      expect(focus.hasFocus, isTrue);
+      await select(tester, 'Film');
+      expect(focus.hasFocus, isFalse);
+      expect(find.text('Arrival'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    },
   );
 }

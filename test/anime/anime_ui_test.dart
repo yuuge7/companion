@@ -53,4 +53,31 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets(
+    'large import previews fit narrow screens with keyboard and enlarged text',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(320, 760));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+      addTearDown(tester.view.resetViewInsets);
+      tester.platformDispatcher.textScaleFactorTestValue = 1.7;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: AnimeImportPreview(
+            incoming: List.generate(
+              530,
+              (i) => AnimeEntry(id: '$i', title: 'Imported anime $i'),
+            ),
+            existing: const [],
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Merge anime library'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
 }

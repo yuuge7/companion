@@ -87,6 +87,21 @@ class MainActivity : FlutterFragmentActivity() {
             }
         }
         val messenger = flutterEngine.dartExecutor.binaryMessenger
+        MethodChannel(messenger, "io.github.yuuge7.companion/isbn").setMethodCallHandler { call, result ->
+            if (call.method != "scan") {
+                result.notImplemented()
+            } else {
+                val options = com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions.Builder()
+                    .setBarcodeFormats(com.google.mlkit.vision.barcode.common.Barcode.FORMAT_EAN_13)
+                    .enableAutoZoom()
+                    .build()
+                com.google.mlkit.vision.codescanner.GmsBarcodeScanning.getClient(this, options)
+                    .startScan()
+                    .addOnSuccessListener { barcode -> result.success(barcode.rawValue) }
+                    .addOnCanceledListener { result.success(null) }
+                    .addOnFailureListener { result.error("scanner_unavailable", "Enter the ISBN manually.", null) }
+            }
+        }
         modeChannel = MethodChannel(messenger, "io.github.yuuge7.companion/navigation")
         modeChannel!!.setMethodCallHandler { call, result ->
             if (call.method == "initialMode") {

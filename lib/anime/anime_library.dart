@@ -23,6 +23,25 @@ class AnimeLibrary extends ChangeNotifier {
   File get _file => File('${directory.path}/anime-v1.json');
   File get _previous => File('${directory.path}/anime-v1.previous.json');
 
+  Future<void> settle() => _writes;
+  Map<String, dynamic> companionState() => {
+    'library': jsonDecode(AnimeBackup.encode(_entries)),
+    'trash': _trash,
+    'snapshot': _snapshot == null
+        ? null
+        : jsonDecode(AnimeBackup.encode(_snapshot!)),
+  };
+
+  static void validateCompanionState(Map<String, dynamic> state) {
+    final temporary = AnimeLibrary(Directory.systemTemp);
+    temporary._decode(jsonEncode(state));
+    temporary.dispose();
+  }
+
+  Future<void> restoreCompanion(Map<String, dynamic> state) => _change(() {
+    _decode(jsonEncode(state));
+  });
+
   Future<void> load() async {
     try {
       if (!await _file.exists()) return;

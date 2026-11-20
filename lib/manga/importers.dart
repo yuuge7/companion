@@ -1,3 +1,5 @@
+import '../core/import_text.dart';
+
 import 'dart:convert';
 import 'dart:io' show gzip;
 import 'dart:typed_data';
@@ -80,7 +82,7 @@ ParsedBackup? parseBackupFile(Uint8List bytes) {
 
 String? _tryUtf8(Uint8List data) {
   try {
-    return utf8.decode(data);
+    return readImportText(data);
   } catch (_) {
     return null;
   }

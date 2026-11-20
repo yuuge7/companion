@@ -1,3 +1,8 @@
+import 'core/companion_data.dart';
+import 'core/companion_backup.dart';
+import 'core/companion_backup_screen.dart';
+import 'core/companion_hub.dart';
+
 import 'dart:async';
 import 'dart:io';
 
@@ -75,6 +80,19 @@ class CompanionDependencies {
       } catch (error, stack) {
         Diagnostics.record(error, stack, source: 'film migration');
       }
+    }
+    final companion = CompanionData(
+      books: books,
+      settings: settings,
+      mangaLibrary: mangaState,
+      filmLibrary: filmState,
+      anime: anime,
+      preferences: preferences,
+    );
+    try {
+      await CompanionBackup(companion).recoverInterruptedRestore();
+    } finally {
+      companion.dispose();
     }
     return CompanionDependencies(
       books: books,
@@ -182,12 +200,21 @@ class _CompanionShellState extends State<CompanionShell> {
   final _navigators = List.generate(4, (_) => GlobalKey<NavigatorState>());
   final _visited = <int>{};
   late final List<LibraryController> _libraries;
+  late final CompanionData _companion;
   late int _index;
   AppLifecycleListener? _lifecycle;
   CompanionDependencies get deps => widget.dependencies;
   @override
   void initState() {
     super.initState();
+    _companion = CompanionData(
+      books: deps.books,
+      settings: deps.settings,
+      mangaLibrary: deps.manga,
+      filmLibrary: deps.film,
+      anime: deps.anime,
+      preferences: deps.preferences,
+    );
     _libraries = [
       BookLibraryController(deps.books, deps.settings),
       MangaLibraryController(deps.manga),
@@ -224,6 +251,7 @@ class _CompanionShellState extends State<CompanionShell> {
   }
 
   void _select(int index) {
+    FocusManager.instance.primaryFocus?.unfocus();
     if (index == 4) {
       Navigator.of(context).push(
         MaterialPageRoute<void>(
@@ -233,10 +261,59 @@ class _CompanionShellState extends State<CompanionShell> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Your libraries',
+                  'Across your libraries',
                   style: Theme.of(settingsContext).textTheme.titleLarge,
                 ),
                 const SizedBox(height: 8),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.calendar_month_outlined),
+                  title: const Text('Activity diary & year in review'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => openLibraryPage(
+                    settingsContext,
+                    CompanionHub(data: _companion, libraries: _libraries),
+                  ),
+                ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.history_outlined),
+                  title: const Text('Rediscover your backlog'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => openLibraryPage(
+                    settingsContext,
+                    CompanionHub(
+                      data: _companion,
+                      libraries: _libraries,
+                      initialTab: 1,
+                    ),
+                  ),
+                ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.shelves),
+                  title: const Text('Physical collection'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => openLibraryPage(
+                    settingsContext,
+                    CompanionHub(
+                      data: _companion,
+                      libraries: _libraries,
+                      initialTab: 2,
+                    ),
+                  ),
+                ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.backup_outlined),
+                  title: const Text('Complete Companion backup'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => openLibraryPage(
+                    settingsContext,
+                    CompanionBackupScreen(data: _companion),
+                  ),
+                ),
+                const SizedBox(height: 20),
                 ...CompanionMode.values.map(
                   (mode) => ListTile(
                     contentPadding: EdgeInsets.zero,
@@ -276,6 +353,7 @@ class _CompanionShellState extends State<CompanionShell> {
     for (final library in _libraries) {
       library.dispose();
     }
+    _companion.dispose();
     _lifecycle?.dispose();
     _navigation.setMethodCallHandler(null);
     super.dispose();
@@ -283,19 +361,28 @@ class _CompanionShellState extends State<CompanionShell> {
 
   Widget _branch(int index) {
     if (!_visited.contains(index)) return const SizedBox.shrink();
-    return HeroMode(
-      enabled: index == _index,
-      child: TickerMode(
+    return ExcludeFocus(
+      excluding: index != _index,
+      child: HeroMode(
         enabled: index == _index,
-        child: ScaffoldMessenger(
-          child: NavigatorPopHandler<Object?>(
-            enabled: index == _index,
-            onPopWithResult: (result) =>
-                _navigators[index].currentState?.pop(result),
-            child: Navigator(
-              key: _navigators[index],
-              onGenerateRoute: (_) => MaterialPageRoute<void>(
-                builder: (_) => LibraryScreen(controller: _libraries[index]),
+        child: TickerMode(
+          enabled: index == _index,
+          child: ScaffoldMessenger(
+            child: NavigatorPopHandler<Object?>(
+              enabled: index == _index,
+              onPopWithResult: (result) =>
+                  _navigators[index].currentState?.pop(result),
+              child: Navigator(
+                key: _navigators[index],
+                onGenerateRoute: (_) => MaterialPageRoute<void>(
+                  builder: (_) => LibraryScreen(
+                    controller: _libraries[index],
+                    onCompanion: (context) => openLibraryPage(
+                      context,
+                      CompanionHub(data: _companion, libraries: _libraries),
+                    ),
+                  ),
+                ),
               ),
             ),
           ),

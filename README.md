@@ -18,6 +18,16 @@ search, filters, ratings and backup tools.
   statistics and optional folder backups.
 - **Anime:** episode and movie progress, rewatches, release metadata, half-star
   ratings, import previews and recovery snapshots.
+- **Across your libraries:** an activity diary with a tappable calendar heatmap,
+  combined year in review, and backlog rediscovery with reasons to return.
+- **Faster book adding:** search Open Library by title or ISBN, or scan an ISBN on
+  Android. Review the edition, cover and metadata before filling the book editor.
+- **Physical collection:** owned and borrowed books and manga, shelf locations,
+  loan recipients, volume lists and missing volumes.
+- **Complete Companion backup:** one `.companion` file for all four libraries,
+  book cover files, histories, collection details, trash, recovery snapshots and
+  shared settings. Restore previews, checksums and a durable recovery copy protect
+  the restore flow.
 - **Shared experience:** light/dark/system themes, optional Material You colors,
   app lock, recent-app preview protection, large-text support and adaptive navigation.
 - **Home-screen widgets:** Current book, Manga reading and What fits tonight.
@@ -25,18 +35,53 @@ search, filters, ratings and backup tools.
 The four libraries retain separate data models, storage and backup formats.
 Switching sections preserves each library's navigation, search and filters.
 Library data stays on the device; poster and cover images can be fetched online.
+Manga entries show their last edit date on the shelf and in details. Film **Recent**
+sorts by the latest recorded viewing, with undated entries last; **Last edited**
+and **Date added** are separate sort choices.
+The calendar button in any library opens Activity, Rediscover and Collection.
+Shared Settings also links to these tools and Complete Companion backup.
+
+The diary uses recorded progress, reading sessions and viewing dates. Approximate
+and year-only dates stay outside the daily heatmap; the year review includes them
+only at their recorded precision. Imported undated progress is never assigned to
+an invented day. Series episode steps are logged from this version onward.
+Rediscovery excludes recently active, finished and dropped entries.
+
+Open a book or manga editor and expand **Physical collection** to record ownership,
+a shelf, who lent it to you or who you lent it to, and volume ranges such as
+`1-4, 7, 9`. The Collection view can filter loans and missing volumes.
+
+Book lookup uses the [Open Library APIs](https://openlibrary.org/developers/api).
+Android ISBN scanning uses the [Google code scanner](https://developers.google.com/ml-kit/vision/barcode-scanning/code-scanner)
+and requires Google Play services. Manual title and ISBN entry remain available.
 
 ### Import and export
 
 | Library | Import | Export |
 | --- | --- | --- |
 | Books | `.bcbackup`, legacy/schema-2 book JSON, Goodreads CSV | Complete `.bcbackup`, JSON, CSV, HTML, PDF |
-| Manga | Manga JSON, MyAnimeList manga XML, Anime-Planet manga JSON, Mihon/Tachiyomi backups | Manga JSON, CSV |
+| Manga | Manga JSON, MyAnimeList manga XML, Anime-Planet manga JSON/HTML, Mihon/Tachiyomi backups | Manga JSON, CSV |
 | Film | Screen Companion schema-2 JSON and legacy film arrays | Film JSON, CSV |
-| Anime | Anime Companion schema-1 JSON, Anime-Planet anime JSON, MyAnimeList anime XML; gzip supported | Anime JSON, CSV |
+| Anime | Anime Companion schema-1 JSON, Anime-Planet anime JSON/HTML, MyAnimeList anime XML; gzip supported | Anime JSON, CSV |
 
-Use each library's backup format for a complete round trip. CSV is a report for
-Manga, Film and Anime. Import a backup in its matching section; Companion rejects
+For an all-library round trip, open **Settings → Complete Companion backup**.
+Choose **Save complete backup** to export a `.companion` archive. To restore,
+choose a file, review the counts and then select **Replace libraries and restore**.
+This replaces all four libraries and shared settings, including privacy settings.
+The prior libraries are saved locally and can be reviewed from the same screen;
+an interrupted restore recovers them on the next startup. Keep an exported copy
+off the device. Backups include book cover files; manga and poster image URLs are
+preserved. Complete archives are limited to 150 MB; per-library exports remain
+available for larger collections. Trash keeps its existing 30-day retention.
+
+Use each library's backup format for an individual round trip. CSV is a report for
+Manga, Film and Anime. The Manga and Anime import pickers accept files regardless of their extension or
+Android MIME label, including `export-manga-username.json` and
+`export-anime-username.json` saved as `.html`. HTML-wrapped JSON and export tables
+with named title, status and chapter/episode columns are read as data; saved login
+pages are rejected. Import previews stay within the library that opened them.
+
+Import a backup in its matching section; Companion rejects
 recognizable backups belonging to another library.
 
 ## Install

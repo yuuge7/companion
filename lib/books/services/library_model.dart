@@ -94,6 +94,29 @@ class LibraryModel extends ChangeNotifier {
     return result;
   }
 
+  Future<void> settle() => _queue;
+
+  Future<void> restoreCompanion(ImportData data) async {
+    await _queue;
+    final next = await storage.materialize(data);
+    storage.validate(next);
+    if (loadFailed) {
+      final damaged = await storage.file('books.json');
+      if (await damaged.exists()) {
+        await damaged.copy(
+          '${damaged.path}.damaged-${DateTime.now().millisecondsSinceEpoch}',
+        );
+      }
+    }
+    await storage.saveBooks(next);
+    _books = next;
+    loadFailed = false;
+    saveError = null;
+    _retry = null;
+    notifyListeners();
+    await refreshWidget();
+  }
+
   Future<bool> retrySave() async {
     final retry = _retry;
     _retry = null;

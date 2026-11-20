@@ -1,3 +1,5 @@
+import 'package:intl/intl.dart';
+
 // Short, mono-friendly formatting. Everything here ends up set in
 // PlexMono with tabular figures, so widths stay stable while numbers change.
 
@@ -47,3 +49,8 @@ String dayCount(int n) => '${groupDigits(n)} ${n == 1 ? 'day' : 'days'}';
 /// "1 title" / "12 titles" — the app says "titles", never "entries" or
 /// "items", because that is the word on the shelf.
 String titleCount(int n) => '${groupDigits(n)} ${n == 1 ? 'title' : 'titles'}';
+
+String editedLabel(int timestamp) => timestamp <= 0
+    ? 'Not recorded'
+    : DateFormat('d MMM y, HH:mm')
+          .format(DateTime.fromMillisecondsSinceEpoch(timestamp));

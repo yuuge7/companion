@@ -1,3 +1,5 @@
+import '../core/import_text.dart';
+
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -34,7 +36,7 @@ class AnimeBackup {
       decoder.close();
       bytes = Uint8List.fromList(chunks);
     }
-    final text = utf8.decode(bytes).replaceFirst('\uFEFF', '').trim();
+    final text = readImportText(bytes);
     if (text.startsWith('<')) return _mal(text);
     final decoded = jsonDecode(text);
     // Storage decoding remains strict: only the file-import path accepts AP.

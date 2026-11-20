@@ -18,6 +18,7 @@ Future<ImportMode?> showImportPreview(
 }) {
   return showDialog<ImportMode>(
     context: context,
+    useRootNavigator: false,
     builder: (_) => _ImportPreview(state: state, backup: backup, plan: plan),
   );
 }

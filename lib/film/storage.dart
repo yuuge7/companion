@@ -54,6 +54,7 @@ class ShelfStore {
   final Directory? directory;
   String? _raw;
   Future<void> _writes = Future.value();
+  Future<void> settle() => _writes;
   List<TrashEntry> trash = [];
   List<ShelfEntry>? snapshot;
   int? snapshotAt;

@@ -218,7 +218,7 @@ class BookLibraryController extends LibraryController {
 
   @override
   List<LibraryRowData> rows(LibraryDisplayQuery query) {
-    final filter = _filters.copy()
+    final filter = (query.ignoreFilters ? LibraryQuery() : _filters.copy())
       ..search = query.search
       ..sort = switch (query.sort) {
         'title' => LibrarySort.title,

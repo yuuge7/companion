@@ -52,6 +52,9 @@ class FilmLibraryController extends LibraryController {
   @override
   List<LibraryChoice> get sorts => const [
     LibraryChoice('recent', 'Recent'),
+    LibraryChoice('watched', 'Last watched'),
+    LibraryChoice('edited', 'Last edited'),
+    LibraryChoice('added', 'Date added'),
     LibraryChoice('title', 'Title'),
     LibraryChoice('progress', 'Progress'),
     LibraryChoice('rating', 'Rating'),
@@ -247,13 +250,15 @@ class FilmLibraryController extends LibraryController {
 
   @override
   List<LibraryRowData> rows(LibraryDisplayQuery query) {
-    _search = query.search;
+    if (!query.ignoreFilters) {
+      _search = query.search;
+    }
     final search = query.search.trim().toLowerCase();
     final entries = state.entries
         .where(
           (entry) =>
               (query.shelf == 'all' || entry.status == query.shelf) &&
-              _filter.matches(entry) &&
+              (query.ignoreFilters || _filter.matches(entry)) &&
               [
                 entry.title,
                 entry.director,
@@ -266,16 +271,21 @@ class FilmLibraryController extends LibraryController {
         : entry.episodes == null
         ? -1
         : entry.watched / entry.episodes!;
-    entries.sort(
-      (a, b) => switch (query.sort) {
+    entries.sort((a, b) {
+      final order = switch (query.sort) {
         'title' => a.title.toLowerCase().compareTo(b.title.toLowerCase()),
         'rating' => b.rating.compareTo(a.rating),
         'year' => (b.year ?? 0).compareTo(a.year ?? 0),
         'runtime' => (a.runtime ?? 1000000).compareTo(b.runtime ?? 1000000),
         'progress' => progress(b).compareTo(progress(a)),
-        _ => b.lastUpdated.compareTo(a.lastUpdated),
-      },
-    );
+        'edited' => b.lastUpdated.compareTo(a.lastUpdated),
+        'added' => b.addedAt.compareTo(a.addedAt),
+        _ => (b.watchedAt ?? -1).compareTo(a.watchedAt ?? -1),
+      };
+      if (order != 0) return order;
+      final added = b.addedAt.compareTo(a.addedAt);
+      return added != 0 ? added : a.id.compareTo(b.id);
+    });
     return (query.descending ? entries.reversed : entries)
         .map(
           (entry) => LibraryRowData(

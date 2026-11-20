@@ -49,6 +49,16 @@ class AppState extends ChangeNotifier {
       sortMode =
           SortMode.values.asNameMap()[_store.loadSortMode()] ?? SortMode.recent;
 
+  Future<void> settle() => _store.settle();
+
+  Future<void> restoreCompanion(List<MangaEntry> incoming) async {
+    await _store.save(incoming);
+    _entries = incoming.toList();
+    _store.loadFailed = false;
+    notifyListeners();
+    onSaved?.call();
+  }
+
   /// Read-only view, not a copy: cheap to read often. Take [snapshot] to
   /// keep the shelf as it is now.
   List<MangaEntry> get entries => UnmodifiableListView(_entries);
@@ -133,6 +143,12 @@ class AppState extends ChangeNotifier {
     return null;
   }
 
+  Future<void> restoreSort(SortMode mode) async {
+    await _store.saveSortMode(mode.name);
+    sortMode = mode;
+    notifyListeners();
+  }
+
   void setSort(SortMode mode) {
     sortMode = mode;
     notifyListeners();
@@ -194,7 +210,9 @@ class AppState extends ChangeNotifier {
 
   Future<void> setRating(String id, int rating) async {
     final e = byId(id);
-    if (e != null) await _replace(e.copyWith(rating: rating));
+    if (e != null) {
+      await _replace(e.copyWith(rating: rating, lastUpdated: _now()));
+    }
   }
 
   /// Starts a finished title over. Returns the entry as it was, for undo.
@@ -280,6 +298,7 @@ class AppState extends ChangeNotifier {
           startedAt: inc.startedAt ?? mine.startedAt,
           finishedAt: inc.finishedAt ?? mine.finishedAt,
           history: inc.history.isEmpty ? mine.history : null,
+          collection: inc.collection.isTracked ? null : mine.collection,
         ),
       );
     }

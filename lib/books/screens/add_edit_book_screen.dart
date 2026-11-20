@@ -1,3 +1,8 @@
+import '../../core/physical_collection.dart';
+import '../../core/widgets/collection_fields.dart';
+import '../services/book_lookup.dart';
+import 'book_lookup_screen.dart';
+
 import 'dart:io';
 
 import '../../core/library.dart';
@@ -18,7 +23,8 @@ import '../widgets/read_format_fields.dart';
 import 'cover_crop_screen.dart';
 
 class AddEditBookScreen extends StatefulWidget {
-  const AddEditBookScreen({super.key, this.book});
+  const AddEditBookScreen({super.key, this.book, this.lookup});
+  final BookLookup? lookup;
   final Book? book;
   @override
   State<AddEditBookScreen> createState() => _AddEditBookScreenState();
@@ -26,6 +32,7 @@ class AddEditBookScreen extends StatefulWidget {
 
 class _AddEditBookScreenState extends State<AddEditBookScreen> {
   final _form = GlobalKey<FormState>();
+  late final _lookup = widget.lookup ?? BookLookup();
   final _fields = <String, TextEditingController>{};
   late BookStatus _status;
   late BookFormat _format;
@@ -34,10 +41,12 @@ class _AddEditBookScreenState extends State<AddEditBookScreen> {
   int? _rating;
   String? _cover, _error;
   bool _saving = false;
+  late PhysicalCollection _collection;
   @override
   void initState() {
     super.initState();
     final b = widget.book;
+    _collection = b?.collection ?? const PhysicalCollection();
     final values = <String, String>{
       'Title': b?.title ?? '',
       'Author': b?.author ?? '',
@@ -122,6 +131,50 @@ class _AddEditBookScreenState extends State<AddEditBookScreen> {
       },
     ),
   );
+  Future<void> _findBook() async {
+    final result = await Navigator.of(context).push<BookMetadata>(
+      MaterialPageRoute(builder: (_) => BookLookupScreen(lookup: _lookup)),
+    );
+    if (result == null || !mounted) return;
+    setState(() => _saving = true);
+    String? cover;
+    String? warning;
+    try {
+      final bytes = await _lookup.cover(result.coverUrl);
+      if (!mounted) return;
+      if (bytes != null) {
+        cover = await context.read<LibraryModel>().storage.storeCover(bytes);
+      } else if (result.coverUrl.isNotEmpty) {
+        warning = 'Details filled. Cover could not be downloaded; add one from Gallery.';
+      }
+    } catch (_) {
+      warning =
+          'Details filled. Cover could not be saved; add one from Gallery.';
+    }
+    if (!mounted) return;
+    final duplicate = context.read<LibraryModel>().books.any(
+      (b) =>
+          b.id != widget.book?.id &&
+          ((result.isbn.isNotEmpty &&
+                  BookLookup.normalizeIsbn(b.isbn) == result.isbn) ||
+              (b.title.toLowerCase() == result.title.toLowerCase() &&
+                  b.author.toLowerCase() == result.author.toLowerCase())),
+    );
+    setState(() {
+      _fields['Title']!.text = result.title;
+      _fields['Author']!.text = result.author;
+      _fields['ISBN']!.text = result.isbn;
+      _fields['Publisher']!.text = result.publisher;
+      _fields['Publication year']!.text = result.year?.toString() ?? '';
+      _fields['Total pages']!.text = result.pages?.toString() ?? '';
+      if (cover != null) _cover = cover;
+      _saving = false;
+      _error = duplicate
+          ? 'This book may already be in your library. Review before saving.'
+          : warning;
+    });
+  }
+
   Future<void> _pickCover(ImageSource source) async {
     try {
       final picked = await ImagePicker().pickImage(
@@ -155,6 +208,7 @@ class _AddEditBookScreenState extends State<AddEditBookScreen> {
         .copyWith(
           title: value('Title'),
           author: value('Author'),
+          collection: _collection,
           coverImagePath: _cover,
           totalPages: int.tryParse(value('Total pages')),
           totalMinutes: minutes(value('Audio duration (h:mm)')),
@@ -280,6 +334,12 @@ class _AddEditBookScreenState extends State<AddEditBookScreen> {
       child: ListView(
         padding: const EdgeInsets.all(20),
         children: [
+          OutlinedButton.icon(
+            onPressed: _saving ? null : _findBook,
+            icon: const Icon(Icons.manage_search),
+            label: const Text('Find by title or scan ISBN'),
+          ),
+          const SizedBox(height: 20),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -325,6 +385,11 @@ class _AddEditBookScreenState extends State<AddEditBookScreen> {
           const SizedBox(height: 24),
           field('Title', required: true),
           field('Author'),
+          CollectionFields(
+            value: _collection,
+            onChanged: (v) => setState(() => _collection = v),
+          ),
+          const SizedBox(height: 14),
           DropdownButtonFormField<BookFormat>(
             isExpanded: true,
             initialValue: _format,

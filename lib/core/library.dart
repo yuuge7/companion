@@ -24,6 +24,7 @@ class LibraryChoice {
 class LibraryDisplayQuery {
   String search = '', shelf = 'all', sort = 'recent';
   bool descending = false;
+  bool ignoreFilters = false;
 }
 
 class LibraryAction {
@@ -51,9 +52,10 @@ class LibraryRowData {
     this.increase,
     this.stepUnit = '',
     this.stepName = '',
+    this.updatedLabel = '',
     this.actions = const [],
   });
-  final String id, title, subtitle, progress, stepUnit, stepName;
+  final String id, title, subtitle, progress, stepUnit, stepName, updatedLabel;
   final String? coverUrl, coverPath;
   final double? fraction, rating;
   final Future<void> Function(BuildContext) edit, details;
@@ -144,7 +146,8 @@ Future<void> showLibraryDetails(
 );
 
 class LibraryScreen extends StatefulWidget {
-  const LibraryScreen({super.key, required this.controller});
+  const LibraryScreen({super.key, required this.controller, this.onCompanion});
+  final Future<void> Function(BuildContext)? onCompanion;
   final LibraryController controller;
   @override
   State<LibraryScreen> createState() => _LibraryScreenState();
@@ -237,6 +240,12 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 ),
           actions: _selected.isEmpty
               ? [
+                  if (widget.onCompanion != null)
+                    IconButton(
+                      tooltip: 'Activity, rediscovery & collection',
+                      icon: const Icon(Icons.calendar_month_outlined),
+                      onPressed: () => widget.onCompanion!(context),
+                    ),
                   IconButton(
                     tooltip: '${library.mode.label} statistics',
                     onPressed: _stats,
@@ -684,6 +693,15 @@ class LibraryItemRow extends StatelessWidget {
                             ),
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                        if (data.updatedLabel.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            data.updatedLabel,
+                            style: CompanionType.small.copyWith(
+                              color: colors.onSurfaceVariant,
+                            ),
                           ),
                         ],
                         const SizedBox(height: 9),

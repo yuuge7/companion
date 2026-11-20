@@ -18,6 +18,7 @@
         android:enableOnBackInvokedCallback="true"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+        <meta-data android:name="com.google.mlkit.vision.DEPENDENCIES" android:value="barcode_ui" />
         <!-- Flutter 3.47's OpenGL Impeller path stalls on our Android emulator.
              Keep the measured legacy renderer until the pinned SDK is upgraded. -->
         <meta-data android:name="io.flutter.embedding.android.EnableImpeller" android:value="false" />

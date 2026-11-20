@@ -1,3 +1,5 @@
+import '../../core/physical_collection.dart';
+
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
@@ -86,11 +88,13 @@ class MangaEntry {
   final int? startedAt; // epoch ms
   final int? finishedAt; // epoch ms
   final List<ReadEvent> history;
+  final PhysicalCollection collection;
 
   MangaEntry({
     required this.id,
     required this.title,
     this.coverUrl = '',
+    this.collection = const PhysicalCollection(),
     this.readUrl = '',
     this.currentChapter = 0,
     this.totalChapters,
@@ -117,6 +121,7 @@ class MangaEntry {
     String? id,
     String? title,
     String? coverUrl,
+    PhysicalCollection? collection,
     String? readUrl,
     int? currentChapter,
     Object? totalChapters = _keep,
@@ -133,6 +138,7 @@ class MangaEntry {
       id: id ?? this.id,
       title: title ?? this.title,
       coverUrl: coverUrl ?? this.coverUrl,
+      collection: collection ?? this.collection,
       readUrl: readUrl ?? this.readUrl,
       currentChapter: currentChapter ?? this.currentChapter,
       totalChapters: identical(totalChapters, _keep)
@@ -262,6 +268,7 @@ class MangaEntry {
     final id = json['id'];
     final rawHistory = json['history'];
     return MangaEntry(
+      collection: PhysicalCollection.fromJson(json['collection']),
       id: id is String && id.isNotEmpty ? id : newId(),
       title: json['title'] as String? ?? '',
       coverUrl: json['coverUrl'] as String? ?? '',
@@ -285,6 +292,7 @@ class MangaEntry {
     'id': id,
     'title': title,
     'coverUrl': coverUrl,
+    'collection': collection.toJson(),
     'readUrl': readUrl,
     'currentChapter': currentChapter,
     'totalChapters': totalChapters,

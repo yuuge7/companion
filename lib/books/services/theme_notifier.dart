@@ -20,6 +20,7 @@ class ThemeNotifier extends ChangeNotifier {
   String goalUnit = 'books';
   String? error;
   Future<void> _queue = Future.value();
+  Future<void> settle() => _queue;
   Future<void> load() async {
     try {
       try {

@@ -41,6 +41,8 @@ class ShelfEntry {
   int addedAt; // epoch ms
   int lastUpdated; // epoch ms
 
+  List<Map<String, dynamic>> episodeHistory = [];
+
   ShelfEntry({
     required this.id,
     required this.title,
@@ -224,43 +226,50 @@ class ShelfEntry {
       watched = episodes ?? 0;
     }
     return ShelfEntry(
-      id: (json['id'] as String?)?.isNotEmpty == true
-          ? json['id'] as String
-          : newId(),
-      kind: safeKind,
-      title: json['title'] as String? ?? '',
-      year: _asIntOrNull(json['year']),
-      director: json['director'] as String? ?? '',
-      runtime: _asIntOrNull(json['runtime']),
-      episodes: safeKind == 'series' ? episodes : null,
-      watched: safeKind == 'series' ? max(watched, 0) : 0,
-      posterUrl: json['posterUrl'] as String? ?? '',
-      watchUrl: json['watchUrl'] as String? ?? '',
-      status: safeStatus,
-      rating: _asInt(json['rating']).clamp(0, 5),
-      note: json['note'] as String? ?? '',
-      tags: (json['tags'] is List ? json['tags'] as List : const [])
-          .whereType<String>()
-          .map((t) => t.trim())
-          .where((t) => t.isNotEmpty)
-          .toSet()
-          .take(100)
-          .toList(),
-      seasons: (json['seasons'] is List ? json['seasons'] as List : const [])
-          .map(_asInt)
-          .where((n) => n > 0 && n <= 10000)
-          .take(1000)
-          .toList(),
-      viewings: rawViewings is List
-          ? (rawViewings
-                .whereType<Map<String, dynamic>>()
-                .map(Viewing.fromJson)
-                .toList()
-              ..sort(Viewing.compare))
-          : _viewingsFromLegacy(json, safeStatus),
-      addedAt: _asInt(json['addedAt'], now),
-      lastUpdated: _asInt(json['lastUpdated']),
-    );
+        id: (json['id'] as String?)?.isNotEmpty == true
+            ? json['id'] as String
+            : newId(),
+        kind: safeKind,
+        title: json['title'] as String? ?? '',
+        year: _asIntOrNull(json['year']),
+        director: json['director'] as String? ?? '',
+        runtime: _asIntOrNull(json['runtime']),
+        episodes: safeKind == 'series' ? episodes : null,
+        watched: safeKind == 'series' ? max(watched, 0) : 0,
+        posterUrl: json['posterUrl'] as String? ?? '',
+        watchUrl: json['watchUrl'] as String? ?? '',
+        status: safeStatus,
+        rating: _asInt(json['rating']).clamp(0, 5),
+        note: json['note'] as String? ?? '',
+        tags: (json['tags'] is List ? json['tags'] as List : const [])
+            .whereType<String>()
+            .map((t) => t.trim())
+            .where((t) => t.isNotEmpty)
+            .toSet()
+            .take(100)
+            .toList(),
+        seasons: (json['seasons'] is List ? json['seasons'] as List : const [])
+            .map(_asInt)
+            .where((n) => n > 0 && n <= 10000)
+            .take(1000)
+            .toList(),
+        viewings: rawViewings is List
+            ? (rawViewings
+                  .whereType<Map<String, dynamic>>()
+                  .map(Viewing.fromJson)
+                  .toList()
+                ..sort(Viewing.compare))
+            : _viewingsFromLegacy(json, safeStatus),
+        addedAt: _asInt(json['addedAt'], now),
+        lastUpdated: _asInt(json['lastUpdated']),
+      )
+      ..episodeHistory = (json['episodeHistory'] as List? ?? []).map((e) {
+        final row = Map<String, dynamic>.from(e as Map);
+        if (row['at'] is! int || row['from'] is! int || row['to'] is! int) {
+          throw const FormatException('Invalid episode history.');
+        }
+        return row;
+      }).toList();
   }
 
   Map<String, dynamic> toJson() => {
@@ -280,6 +289,7 @@ class ShelfEntry {
     'tags': tags,
     'seasons': seasons,
     'viewings': viewings.map((v) => v.toJson()).toList(),
+    'episodeHistory': episodeHistory,
     'addedAt': addedAt,
     'lastUpdated': lastUpdated,
   };

@@ -233,33 +233,41 @@ class AnimeImportPreview extends StatelessWidget {
       appBar: AppBar(title: const Text('Preview anime import')),
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '${incoming.length} anime titles',
-                  style: Theme.of(context).textTheme.headlineSmall,
+          Expanded(
+            child: CustomScrollView(
+              slivers: [
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${incoming.length} anime titles',
+                          style: Theme.of(context).textTheme.headlineSmall,
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          '$added new · $updated newer · $kept kept locally',
+                        ),
+                        const SizedBox(height: 12),
+                        const Text(
+                          'Merge adds new anime and updates newer copies. Older copies stay local. Replace moves the current anime library to trash. A pre-import anime snapshot is saved for either choice.',
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-                const SizedBox(height: 12),
-                Text('$added new · $updated newer · $kept kept locally'),
-                const SizedBox(height: 12),
-                const Text(
-                  'Merge adds new anime and updates newer copies. Older copies stay local. Replace moves the current anime library to trash. A pre-import anime snapshot is saved for either choice.',
+                SliverList.builder(
+                  itemCount: incoming.length,
+                  itemBuilder: (_, i) => ListTile(
+                    title: Text(incoming[i].title),
+                    subtitle: Text(
+                      '${incoming[i].animeFormat.label} · ${incoming[i].progressLabel}',
+                    ),
+                  ),
                 ),
               ],
-            ),
-          ),
-          Expanded(
-            child: ListView.builder(
-              itemCount: incoming.length,
-              itemBuilder: (_, i) => ListTile(
-                title: Text(incoming[i].title),
-                subtitle: Text(
-                  '${incoming[i].animeFormat.label} · ${incoming[i].progressLabel}',
-                ),
-              ),
             ),
           ),
           SafeArea(

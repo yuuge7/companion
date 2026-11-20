@@ -1,3 +1,6 @@
+import '../../core/physical_collection.dart';
+import '../../core/widgets/collection_fields.dart';
+
 import 'package:flutter/material.dart';
 
 import '../../core/library.dart';
@@ -70,6 +73,8 @@ class _EditSheetState extends State<_EditSheet> {
   late final TextEditingController _rereads;
   late ShelfStatus _status;
   String? _error;
+  final _form = GlobalKey<FormState>();
+  late PhysicalCollection _collection;
 
   bool get isEdit => widget.initial != null;
 
@@ -77,6 +82,7 @@ class _EditSheetState extends State<_EditSheet> {
   void initState() {
     super.initState();
     final e = widget.initial;
+    _collection = e?.collection ?? const PhysicalCollection();
     _title = TextEditingController(text: e?.title ?? '');
     _coverUrl = TextEditingController(text: e?.coverUrl ?? '');
     _readUrl = TextEditingController(text: e?.readUrl ?? '');
@@ -111,6 +117,7 @@ class _EditSheetState extends State<_EditSheet> {
       widget.state.findDuplicate(_title.text, exceptId: widget.initial?.id);
 
   void _save() {
+    if (!_form.currentState!.validate()) return;
     final title = _title.text.trim();
     if (title.isEmpty) {
       setState(() => _error = 'Give the title a name so you can find it.');
@@ -149,7 +156,7 @@ class _EditSheetState extends State<_EditSheet> {
           .moveTo(_status, now: now)
           .copyWith(lastUpdated: now);
     }
-    Navigator.of(context).pop(entry);
+    Navigator.of(context).pop(entry.copyWith(collection: _collection));
   }
 
   Widget _field({
@@ -231,6 +238,7 @@ class _EditSheetState extends State<_EditSheet> {
         const SectionLabel('History'),
         const SizedBox(height: 4),
         _historyLine('Added', shortDate(e.addedAt)),
+        _historyLine('Last edited', editedLabel(e.lastUpdated)),
         _historyLine('Started', shortDate(e.startedAt)),
         _historyLine('Finished', shortDate(e.finishedAt)),
         const SizedBox(height: 6),
@@ -278,115 +286,122 @@ class _EditSheetState extends State<_EditSheet> {
         child: SheetScaffold(
           title: isEdit ? 'Edit title' : 'Add a title',
           showHeader: !widget.fullPage,
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _field(
-                  label: 'Title',
-                  controller: _title,
-                  hint: 'Berserk',
-                  autofocus: !isEdit,
-                  capitalization: TextCapitalization.words,
-                  errorText: _error,
-                  onChanged: (_) => setState(() => _error = null),
-                ),
-                if (dup != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Semantics(
-                      liveRegion: true,
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Icon(
-                            Icons.warning_amber_rounded,
-                            size: 16,
-                            color: t.danger,
-                          ),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Text(
-                              '"${dup.title}" is already on your '
-                              '${dup.status.label.toLowerCase()} shelf, at '
-                              'chapter ${dup.currentChapter}.',
-                              style: Type.bodySm.copyWith(color: t.danger),
+          child: Form(
+            key: _form,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _field(
+                    label: 'Title',
+                    controller: _title,
+                    hint: 'Berserk',
+                    autofocus: !isEdit,
+                    capitalization: TextCapitalization.words,
+                    errorText: _error,
+                    onChanged: (_) => setState(() => _error = null),
+                  ),
+                  if (dup != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Semantics(
+                        liveRegion: true,
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(
+                              Icons.warning_amber_rounded,
+                              size: 16,
+                              color: t.danger,
                             ),
-                          ),
-                        ],
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                '"${dup.title}" is already on your '
+                                '${dup.status.label.toLowerCase()} shelf, at '
+                                'chapter ${dup.currentChapter}.',
+                                style: Type.bodySm.copyWith(color: t.danger),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
+                    ),
+                  const SizedBox(height: 18),
+                  _field(
+                    label: 'Where you read it',
+                    controller: _readUrl,
+                    hint: 'https://…',
+                    keyboardType: TextInputType.url,
+                  ),
+                  const SizedBox(height: 18),
+                  _field(
+                    label: 'Cover image link',
+                    controller: _coverUrl,
+                    hint: 'https://…',
+                    keyboardType: TextInputType.url,
+                  ),
+                  const SizedBox(height: 18),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: _field(
+                          label: 'Chapter you are on',
+                          controller: _currentCh,
+                          hint: '0',
+                          numeric: true,
+                          keyboardType: TextInputType.number,
+                        ),
+                      ),
+                      const SizedBox(width: 18),
+                      Expanded(
+                        child: _field(
+                          label: 'Chapters in total',
+                          controller: _totalCh,
+                          hint: 'blank if ongoing',
+                          numeric: true,
+                          keyboardType: TextInputType.number,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+                  _field(
+                    label: 'Times re-read',
+                    controller: _rereads,
+                    hint: '0',
+                    numeric: true,
+                    keyboardType: TextInputType.number,
+                  ),
+                  const SizedBox(height: 22),
+                  const SizedBox(height: 8),
+                  _statusPicker(),
+                  CollectionFields(
+                    value: _collection,
+                    onChanged: (v) => setState(() => _collection = v),
+                  ),
+                  const SizedBox(height: 26),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: _save,
+                      child: Text(switch ((isEdit, dup != null)) {
+                        (false, false) => 'Add to shelf',
+                        (false, true) => 'Add anyway',
+                        (true, false) => 'Save changes',
+                        (true, true) => 'Save anyway',
+                      }),
                     ),
                   ),
-                const SizedBox(height: 18),
-                _field(
-                  label: 'Where you read it',
-                  controller: _readUrl,
-                  hint: 'https://…',
-                  keyboardType: TextInputType.url,
-                ),
-                const SizedBox(height: 18),
-                _field(
-                  label: 'Cover image link',
-                  controller: _coverUrl,
-                  hint: 'https://…',
-                  keyboardType: TextInputType.url,
-                ),
-                const SizedBox(height: 18),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: _field(
-                        label: 'Chapter you are on',
-                        controller: _currentCh,
-                        hint: '0',
-                        numeric: true,
-                        keyboardType: TextInputType.number,
-                      ),
-                    ),
-                    const SizedBox(width: 18),
-                    Expanded(
-                      child: _field(
-                        label: 'Chapters in total',
-                        controller: _totalCh,
-                        hint: 'blank if ongoing',
-                        numeric: true,
-                        keyboardType: TextInputType.number,
-                      ),
-                    ),
+                  if (widget.initial case final e?) ...[
+                    const SizedBox(height: 28),
+                    _history(e),
                   ],
-                ),
-                const SizedBox(height: 18),
-                _field(
-                  label: 'Times re-read',
-                  controller: _rereads,
-                  hint: '0',
-                  numeric: true,
-                  keyboardType: TextInputType.number,
-                ),
-                const SizedBox(height: 22),
-                const SizedBox(height: 8),
-                _statusPicker(),
-                const SizedBox(height: 26),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton(
-                    onPressed: _save,
-                    child: Text(switch ((isEdit, dup != null)) {
-                      (false, false) => 'Add to shelf',
-                      (false, true) => 'Add anyway',
-                      (true, false) => 'Save changes',
-                      (true, true) => 'Save anyway',
-                    }),
-                  ),
-                ),
-                if (widget.initial case final e?) ...[
-                  const SizedBox(height: 28),
-                  _history(e),
                 ],
-              ],
+              ),
             ),
           ),
         ),

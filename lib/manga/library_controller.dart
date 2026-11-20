@@ -70,7 +70,7 @@ class MangaLibraryController extends LibraryController {
     context,
     LibraryDataPage(
       controller: this,
-      description: 'Manga JSON, MyAnimeList manga XML, Anime-Planet manga JSON and Mihon backups. JSON is the complete manga backup.',
+      description: 'Manga JSON, MyAnimeList manga XML, Anime-Planet manga JSON/HTML and Mihon backups. JSON is the complete manga backup.',
       actions: [
         LibraryAction('import', 'Import backup', Icons.file_upload_outlined, (
           context,
@@ -189,7 +189,7 @@ class MangaLibraryController extends LibraryController {
         .where(
           (entry) =>
               (query.shelf == 'all' || entry.status.json == query.shelf) &&
-              entry.rating >= _minimumRating &&
+              (query.ignoreFilters || entry.rating >= _minimumRating) &&
               entry.title.toLowerCase().contains(
                 query.search.trim().toLowerCase(),
               ),
@@ -215,6 +215,7 @@ class MangaLibraryController extends LibraryController {
             id: entry.id,
             title: entry.title,
             subtitle: entry.status.label,
+            updatedLabel: 'Last edited: ${editedLabel(entry.lastUpdated)}',
             coverUrl: entry.coverUrl,
             progress:
                 '${entry.currentChapter} / ${entry.totalChapters ?? "?"} chapters',
@@ -228,6 +229,7 @@ class MangaLibraryController extends LibraryController {
               title: entry.title,
               values: [
                 LibraryMetric('Shelf', entry.status.label),
+                LibraryMetric('Last edited', editedLabel(entry.lastUpdated)),
                 LibraryMetric(
                   'Chapters',
                   '${entry.currentChapter} / ${entry.totalChapters ?? "?"}',
