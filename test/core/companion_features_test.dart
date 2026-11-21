@@ -11,6 +11,7 @@ import 'package:companion/books/services/library_model.dart';
 import 'package:companion/books/services/storage_service.dart';
 import 'package:companion/books/services/theme_notifier.dart';
 import 'package:companion/core/companion_backup.dart';
+import 'package:companion/core/automatic_backup.dart';
 import 'package:companion/core/companion_data.dart';
 import 'package:companion/core/physical_collection.dart';
 import 'package:companion/film/app_state.dart' as film;
@@ -229,6 +230,39 @@ void main() {
         () => backup.decode(Uint8List.fromList([1, 2, 3])),
         throwsFormatException,
       );
+    },
+  );
+
+  test('automatic preparation includes all four libraries and covers and restores unchanged', () async {
+    await seed();
+    await data.books.storage.snapshot(data.books.allBooks);
+    final target = File('${directory.path}/automatic/ready.companion');
+    await AutomaticBackup.prepare(data, target.path);
+    final preview = backup.decode(await target.readAsBytes());
+    expect(preview.counts, {'Books': 2, 'Manga': 1, 'Film': 1, 'Anime': 1});
+    expect(preview.books.covers, isNotEmpty);
+    expect(preview.bookSnapshots, isNotEmpty);
+    await data.mangaLibrary.restoreCompanion([]);
+    await backup.restore(preview);
+    expect(data.mangaLibrary.entries.single.title, 'Witch Hat Atelier');
+    expect(data.books.books.single.collection.lentTo, 'Ana');
+    expect(data.anime.entries.single.title, 'Frieren');
+  });
+
+  test(
+    'failed automatic preparation preserves an existing good archive',
+    () async {
+      await seed();
+      final target = File('${directory.path}/ready.companion');
+      await AutomaticBackup.prepare(data, target.path);
+      final before = await target.readAsBytes();
+      data.books.saveError = 'Disk full';
+      await expectLater(
+        AutomaticBackup.prepare(data, target.path),
+        throwsFormatException,
+      );
+      expect(await target.readAsBytes(), before);
+      data.books.saveError = null;
     },
   );
 

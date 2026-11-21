@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../core/library.dart';
+import '../../core/title_lookup.dart';
+import '../../core/title_lookup_screen.dart';
 
 import '../app_state.dart';
 import '../import_plan.dart';
@@ -17,6 +19,7 @@ Future<ShelfEntry?> showEditSheet(
   ShelfEntry? initial,
   AppState? state,
   bool fullPage = false,
+  TitleLookup? lookup,
 }) {
   if (fullPage) {
     final editor = GlobalKey<_EditSheetState>();
@@ -35,6 +38,7 @@ Future<ShelfEntry?> showEditSheet(
               state: state,
               initial: initial,
               fullPage: true,
+              lookup: lookup,
             ),
           ),
         ),
@@ -44,7 +48,7 @@ Future<ShelfEntry?> showEditSheet(
   return showModalBottomSheet<ShelfEntry>(
     context: context,
     isScrollControlled: true,
-    builder: (_) => _EditSheet(initial: initial, state: state),
+    builder: (_) => _EditSheet(initial: initial, state: state, lookup: lookup),
   );
 }
 
@@ -52,11 +56,13 @@ class _EditSheet extends StatefulWidget {
   final ShelfEntry? initial;
   final AppState? state;
   final bool fullPage;
+  final TitleLookup? lookup;
   const _EditSheet({
     super.key,
     this.initial,
     this.state,
     this.fullPage = false,
+    this.lookup,
   });
 
   @override
@@ -92,6 +98,49 @@ class _EditSheetState extends State<_EditSheet> {
   bool get isEdit => widget.initial != null;
   bool get isSeries => _kind == 'series';
   bool get isSeen => _status == 'seen';
+
+  Future<void> _lookup() async {
+    final item = await openLibraryPage<TitleMetadata>(
+      context,
+      TitleLookupScreen(
+        catalog: isSeries ? TitleCatalog.series : TitleCatalog.film,
+        initialQuery: _title.text,
+        lookup: widget.lookup,
+      ),
+    );
+    if (item == null || !mounted) return;
+    setState(() {
+      _title.text = item.title;
+      if (item.year != null) _year.text = '${item.year}';
+      if (item.minutes != null) _runtime.text = '${item.minutes}';
+      if (item.creator.isNotEmpty) _director.text = item.creator;
+      if (item.coverUrl.isNotEmpty) _posterUrl.text = item.coverUrl;
+      if (item.episodes != null) {
+        final watched = int.tryParse(_watched.text) ?? 0;
+        final seasons = _seasons.text.trim().isEmpty
+            ? <int>[]
+            : _seasons.text
+                  .split(',')
+                  .map((s) => int.tryParse(s.trim()) ?? 0)
+                  .toList();
+        if (item.episodes! >= watched &&
+            (seasons.isEmpty ||
+                seasons.fold<int>(0, (sum, n) => sum + n) == item.episodes)) {
+          _episodes.text = '${item.episodes}';
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Kept your episode total to preserve your progress and season lengths.',
+              ),
+            ),
+          );
+        }
+      }
+      _titleError = null;
+      _yearError = null;
+    });
+  }
 
   @override
   void initState() {
@@ -628,6 +677,15 @@ class _EditSheetState extends State<_EditSheet> {
                   (v) => setState(() => _kind = v),
                 ),
                 const SizedBox(height: 22),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: OutlinedButton.icon(
+                    onPressed: _saving ? null : _lookup,
+                    icon: const Icon(Icons.search),
+                    label: Text(isSeries ? 'Find a series' : 'Find a film'),
+                  ),
+                ),
+                const SizedBox(height: 16),
                 _field(
                   label: 'Title',
                   controller: _title,

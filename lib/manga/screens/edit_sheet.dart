@@ -4,6 +4,8 @@ import '../../core/widgets/collection_fields.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/library.dart';
+import '../../core/title_lookup.dart';
+import '../../core/title_lookup_screen.dart';
 
 import '../app_state.dart';
 import '../format.dart';
@@ -18,6 +20,7 @@ Future<MangaEntry?> showEditSheet(
   required AppState state,
   MangaEntry? initial,
   bool fullPage = false,
+  TitleLookup? lookup,
 }) {
   if (fullPage) {
     final editor = GlobalKey<_EditSheetState>();
@@ -36,6 +39,7 @@ Future<MangaEntry?> showEditSheet(
               state: state,
               initial: initial,
               fullPage: true,
+              lookup: lookup,
             ),
           ),
         ),
@@ -45,7 +49,7 @@ Future<MangaEntry?> showEditSheet(
   return showModalBottomSheet<MangaEntry>(
     context: context,
     isScrollControlled: true,
-    builder: (_) => _EditSheet(state: state, initial: initial),
+    builder: (_) => _EditSheet(state: state, initial: initial, lookup: lookup),
   );
 }
 
@@ -53,11 +57,13 @@ class _EditSheet extends StatefulWidget {
   final AppState state;
   final bool fullPage;
   final MangaEntry? initial;
+  final TitleLookup? lookup;
   const _EditSheet({
     super.key,
     required this.state,
     this.initial,
     this.fullPage = false,
+    this.lookup,
   });
 
   @override
@@ -81,6 +87,24 @@ class _EditSheetState extends State<_EditSheet> {
   late PhysicalCollection _collection;
 
   bool get isEdit => widget.initial != null;
+
+  Future<void> _lookup() async {
+    final item = await openLibraryPage<TitleMetadata>(
+      context,
+      TitleLookupScreen(
+        catalog: TitleCatalog.manga,
+        initialQuery: _title.text,
+        lookup: widget.lookup,
+      ),
+    );
+    if (item == null || !mounted) return;
+    setState(() {
+      _title.text = item.title;
+      if (item.coverUrl.isNotEmpty) _coverUrl.text = item.coverUrl;
+      if (item.chapters != null) _totalCh.text = '${item.chapters}';
+      _error = null;
+    });
+  }
 
   @override
   void initState() {
@@ -365,6 +389,15 @@ class _EditSheetState extends State<_EditSheet> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: OutlinedButton.icon(
+                      onPressed: _lookup,
+                      icon: const Icon(Icons.search),
+                      label: const Text('Find a manga'),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
                   _field(
                     label: 'Title',
                     controller: _title,

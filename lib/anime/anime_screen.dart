@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 
 import '../core/widgets/star_rating.dart';
 import '../core/library.dart';
+import '../core/title_lookup.dart';
+import '../core/title_lookup_screen.dart';
 import 'anime_entry.dart';
 
 class AnimeEditor extends StatefulWidget {
-  const AnimeEditor({super.key, this.initial});
+  const AnimeEditor({super.key, this.initial, this.lookup});
   final AnimeEntry? initial;
+  final TitleLookup? lookup;
   @override
   State<AnimeEditor> createState() => _AnimeEditorState();
 }
@@ -17,6 +20,44 @@ class _AnimeEditorState extends State<AnimeEditor> {
   late AnimeFormat _format;
   late AnimeStatus _status;
   late double _rating;
+
+  Future<void> _lookup() async {
+    final item = await openLibraryPage<TitleMetadata>(
+      context,
+      TitleLookupScreen(
+        catalog: TitleCatalog.anime,
+        initialQuery: _fields['title']!.text,
+        lookup: widget.lookup,
+      ),
+    );
+    if (item == null || !mounted) return;
+    setState(() {
+      _fields['title']!.text = item.title;
+      for (final (key, value) in [
+        ('studio', item.creator),
+        ('posterUrl', item.coverUrl),
+        ('season', item.season),
+      ]) {
+        if (value.isNotEmpty) _fields[key]!.text = value;
+      }
+      for (final (key, value) in [
+        ('year', item.year),
+        ('totalEpisodes', item.episodes),
+        ('episodeMinutes', item.minutes),
+      ]) {
+        if (value != null) _fields[key]!.text = '$value';
+      }
+      _format = switch (item.format.toLowerCase()) {
+        'tv' => AnimeFormat.tv,
+        'movie' => AnimeFormat.movie,
+        'ova' => AnimeFormat.ova,
+        'ona' => AnimeFormat.ona,
+        'special' || 'tv special' => AnimeFormat.special,
+        _ => AnimeFormat.unknown,
+      };
+    });
+  }
+
   @override
   void initState() {
     super.initState();
@@ -147,8 +188,18 @@ class _AnimeEditorState extends State<AnimeEditor> {
       child: ListView(
         padding: const EdgeInsets.all(20),
         children: [
+          Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton.icon(
+              onPressed: _lookup,
+              icon: const Icon(Icons.search),
+              label: const Text('Find an anime'),
+            ),
+          ),
+          const SizedBox(height: 16),
           _field('title', 'Anime title', required: true),
           DropdownButtonFormField<AnimeFormat>(
+            key: ValueKey(_format),
             initialValue: _format,
             decoration: const InputDecoration(labelText: 'Anime format'),
             items: AnimeFormat.values

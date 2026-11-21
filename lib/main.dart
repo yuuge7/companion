@@ -2,6 +2,7 @@ import 'core/companion_data.dart';
 import 'core/companion_backup.dart';
 import 'core/companion_backup_screen.dart';
 import 'core/companion_hub.dart';
+import 'core/automatic_backup.dart';
 
 import 'dart:async';
 import 'dart:io';
@@ -36,6 +37,32 @@ Future<void> main() async {
   await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   await Diagnostics.initialize();
   runApp(const CompanionStartup());
+}
+
+/// Android's scheduled job can create a complete archive without opening UI.
+@pragma('vm:entry-point')
+void companionBackupMain() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  AutomaticBackup.channel.setMethodCallHandler((call) async {
+    if (call.method != 'prepare') throw MissingPluginException();
+    final dependencies = await CompanionDependencies.load();
+    final data = CompanionData(
+      books: dependencies.books,
+      settings: dependencies.settings,
+      mangaLibrary: dependencies.manga,
+      filmLibrary: dependencies.film,
+      anime: dependencies.anime,
+      preferences: dependencies.preferences,
+    );
+    try {
+      await AutomaticBackup.prepare(data, call.arguments as String);
+      return true;
+    } finally {
+      data.dispose();
+      dependencies.dispose();
+    }
+  });
+  await AutomaticBackup.channel.invokeMethod<void>('ready');
 }
 
 class CompanionDependencies {
@@ -215,6 +242,7 @@ class _CompanionShellState extends State<CompanionShell> {
       anime: deps.anime,
       preferences: deps.preferences,
     );
+    AutomaticBackup.attach(_companion);
     _libraries = [
       BookLibraryController(deps.books, deps.settings),
       MangaLibraryController(deps.manga),
@@ -353,6 +381,7 @@ class _CompanionShellState extends State<CompanionShell> {
     for (final library in _libraries) {
       library.dispose();
     }
+    AutomaticBackup.detach();
     _companion.dispose();
     _lifecycle?.dispose();
     _navigation.setMethodCallHandler(null);

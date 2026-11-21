@@ -45,6 +45,7 @@ object Backups {
         }
     }
     private fun release(context: Context, uri: String) {
+        if (CompleteBackups.usesFolder(context, uri)) return
         try { context.contentResolver.releasePersistableUriPermission(Uri.parse(uri),
             Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION) } catch (_: Exception) { }
     }

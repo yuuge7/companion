@@ -34,11 +34,13 @@ class MainActivity : FlutterFragmentActivity() {
     }
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
         MangaShelfStore.onChanged = null
+        CompleteBackups.foreground = null
         super.cleanUpFlutterEngine(flutterEngine)
     }
     private var pendingResult: MethodChannel.Result? = null
     private var pendingContent: String? = null
     private var folderResult: MethodChannel.Result? = null
+    private var completeFolder = false
     private val io = java.util.concurrent.Executors.newSingleThreadExecutor()
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -117,29 +119,30 @@ class MainActivity : FlutterFragmentActivity() {
         MangaShelfStore.onChanged = { mangaWidget.invokeMethod("shelfChanged", null) }
 
         Backups.ensureScheduled(this)
+        CompleteBackups.ensureScheduled(this)
+        val completeChannel = MethodChannel(messenger, CompleteBackups.CHANNEL)
+        CompleteBackups.foreground = completeChannel
+        completeChannel.setMethodCallHandler { call, result ->
+            try {
+                when (call.method) {
+                    "status" -> result.success(CompleteBackups.status(this))
+                    "chooseFolder" -> chooseFolder(result, true)
+                    "setFrequency" -> { CompleteBackups.setFrequency(this, call.arguments as Int); result.success(null) }
+                    "disable" -> { CompleteBackups.disable(this); result.success(null) }
+                    "backupNow" -> CompleteBackups.run(this) { error ->
+                        if (error == null) result.success(null) else result.error("backup_failed", error, null)
+                    }
+                    else -> result.notImplemented()
+                }
+            } catch (e: Exception) { result.error("backup_failed", "Could not update complete backup settings. Try again after any running backup finishes.", null) }
+        }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
             .setMethodCallHandler { call, result -> onMethodCall(call, result) }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "dev.ionel.movie_companion/device")
             .setMethodCallHandler { call, result ->
                 when (call.method) {
                     "backupStatus" -> result.success(Backups.status(this))
-                    "chooseBackupFolder" -> {
-                        if (folderResult != null) {
-                            result.error("busy", "A folder picker is already open", null)
-                        } else {
-                            folderResult = result
-                            try {
-                                startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
-                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION or
-                                        Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION or Intent.FLAG_GRANT_PREFIX_URI_PERMISSION)
-                                    putExtra(Intent.EXTRA_LOCAL_ONLY, true)
-                                }, 0x4A54)
-                            } catch (e: Exception) {
-                                folderResult = null
-                                result.error("no_picker", "No folder picker available", null)
-                            }
-                        }
-                    }
+                    "chooseBackupFolder" -> chooseFolder(result, false)
                     "disableBackup" -> {
                         Backups.disable(this)
                         result.success(null)
@@ -166,6 +169,26 @@ class MainActivity : FlutterFragmentActivity() {
                     else -> result.notImplemented()
                 }
             }
+    }
+
+    private fun chooseFolder(result: MethodChannel.Result, complete: Boolean) {
+        if (folderResult != null) { result.error("busy", "A folder picker is already open", null); return }
+        folderResult = result
+        completeFolder = complete
+        try {
+            startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION or
+                    Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION or Intent.FLAG_GRANT_PREFIX_URI_PERMISSION)
+                putExtra(Intent.EXTRA_LOCAL_ONLY, true)
+                if (complete && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    putExtra(DocumentsContract.EXTRA_INITIAL_URI, DocumentsContract.buildDocumentUri(
+                        EXTERNAL_STORAGE_AUTHORITY, "primary:Documents"))
+                }
+            }, 0x4A54)
+        } catch (e: Exception) {
+            folderResult = null
+            result.error("no_picker", "No folder picker available", null)
+        }
     }
 
     private fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
@@ -219,7 +242,7 @@ class MainActivity : FlutterFragmentActivity() {
             try {
                 val flags = data.flags and (Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
                 contentResolver.takePersistableUriPermission(uri, flags)
-                Backups.configure(this, uri)
+                if (completeFolder) CompleteBackups.configure(this, uri) else Backups.configure(this, uri)
                 result.success(true)
             } catch (e: Exception) { result.error("permission", "Could not keep access to this folder", null) }
             return

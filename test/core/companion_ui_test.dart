@@ -13,6 +13,8 @@ import 'package:companion/books/services/book_lookup.dart';
 import 'package:companion/books/services/library_model.dart';
 import 'package:companion/core/app_frame.dart';
 import 'package:companion/core/companion_data.dart';
+import 'package:companion/core/automatic_backup.dart';
+import 'package:companion/core/companion_backup_screen.dart';
 import 'package:companion/core/companion_hub.dart';
 import 'package:companion/core/library.dart';
 import 'package:companion/core/physical_collection.dart';
@@ -203,6 +205,121 @@ void main() {
     );
     await tester.pumpAndSettle();
   }
+
+  testWidgets(
+    'automatic backup controls show success, change schedule and retain failure details',
+    (tester) async {
+      final calls = <MethodCall>[];
+      final status = <String, dynamic>{
+        'enabled': true,
+        'scheduled': true,
+        'folder': 'Companion backups',
+        'hours': 168,
+        'lastBackup': DateTime(2026, 11, 21, 12).millisecondsSinceEpoch,
+        'error': '',
+        'running': false,
+      };
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(AutomaticBackup.channel, (call) async {
+            calls.add(call);
+            switch (call.method) {
+              case 'status':
+                return status;
+              case 'setFrequency':
+                status['hours'] = call.arguments;
+                return null;
+              case 'backupNow':
+                status['error'] =
+                    'Folder unavailable. Older backups were kept.';
+                throw PlatformException(
+                  code: 'backup_failed',
+                  message: status['error'] as String,
+                );
+              case 'disable':
+                status['enabled'] = false;
+                return null;
+            }
+            return null;
+          });
+      addTearDown(
+        () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(AutomaticBackup.channel, null),
+      );
+      await tester.pumpWidget(
+        CompanionFrame(
+          library: data.books,
+          settings: data.settings,
+          home: CompanionBackupScreen(data: data),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.byType(DropdownButtonFormField<int>),
+        180,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(DropdownButton<int>));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Daily').last);
+      await tester.pumpAndSettle();
+      expect(
+        calls.where((c) => c.method == 'setFrequency').single.arguments,
+        24,
+      );
+      await tester.scrollUntilVisible(find.text('Back up now'), 180);
+      await tester.tap(find.text('Back up now'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Folder unavailable. Older backups were kept.'),
+        findsWidgets,
+      );
+      expect(find.textContaining('Last successful backup:'), findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.text('Turn off automatic backups'),
+        180,
+      );
+      await tester.tap(find.text('Turn off automatic backups'));
+      await tester.pumpAndSettle();
+      expect(find.text('Choose automatic backup folder'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'cancelling the automatic folder picker does not enable or write a backup',
+    (tester) async {
+      final methods = <String>[];
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(AutomaticBackup.channel, (call) async {
+            methods.add(call.method);
+            return call.method == 'status'
+                ? {'enabled': false, 'running': false}
+                : false;
+          });
+      addTearDown(
+        () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(AutomaticBackup.channel, null),
+      );
+      await tester.pumpWidget(
+        CompanionFrame(
+          library: data.books,
+          settings: data.settings,
+          home: CompanionBackupScreen(data: data),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text('Choose automatic backup folder'),
+        180,
+      );
+      await tester.tap(find.text('Choose automatic backup folder'));
+      await tester.pumpAndSettle();
+      expect(methods, contains('chooseFolder'));
+      expect(methods, isNot(contains('backupNow')));
+      expect(find.text('Back up now'), findsNothing);
+    },
+  );
 
   testWidgets('diary date selection, mode filter, and combined review work', (
     tester,

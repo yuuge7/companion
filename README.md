@@ -22,12 +22,20 @@ search, filters, ratings and backup tools.
   combined year in review, and backlog rediscovery with reasons to return.
 - **Faster book adding:** search Open Library by title or ISBN, or scan an ISBN on
   Android. Review the edition, cover and metadata before filling the book editor.
+- **Title lookup in every library:** find manga and anime through Jikan, with
+  Kitsu as a fallback; films through Wikidata; and series through TVmaze. Review
+  the title, artwork and available metadata before filling the editor. Progress,
+  ratings, notes and history are preserved, and saving remains a separate step.
 - **Physical collection:** owned and borrowed books and manga, shelf locations,
   loan recipients, volume lists and missing volumes.
 - **Complete Companion backup:** one `.companion` file for all four libraries,
   book cover files, histories, collection details, trash, recovery snapshots and
   shared settings. Restore previews, checksums and a durable recovery copy protect
   the restore flow.
+- **Automatic complete backups:** choose a folder and a daily or weekly schedule
+  in Complete Companion backup. Android can create archives while the app is
+  closed. Each file is read back and verified before retaining the latest three
+  automatic archives; the screen shows the last success and any backup error.
 - **Shared experience:** light/dark/system themes, optional Material You colors,
   app lock, recent-app preview protection, large-text support and adaptive navigation.
 - **Home-screen widgets:** Current book, Manga reading and What fits tonight.
@@ -57,6 +65,15 @@ Book lookup uses the [Open Library APIs](https://openlibrary.org/developers/api)
 Android ISBN scanning uses the [Google code scanner](https://developers.google.com/ml-kit/vision/barcode-scanning/code-scanner)
 and requires Google Play services. Manual title and ISBN entry remain available.
 
+The manga, film and anime editors have a **Find** button. Film lookup follows the
+editor's Film/Series choice. Catalog search runs only when requested and requires
+internet access; manual entry always remains available. Sources are
+[Wikidata](https://www.wikidata.org/wiki/Wikidata:Data_access),
+[TVmaze](https://www.tvmaze.com/api) (CC BY-SA),
+[Jikan](https://docs.api.jikan.moe/) and [Kitsu](https://kitsu.docs.apiary.io/).
+The review links to each result's source. Covers and metadata can be incomplete;
+ongoing series retain an unknown total rather than using their aired count.
+
 ### Import and export
 
 | Library | Import | Export |
@@ -75,6 +92,15 @@ an interrupted restore recovers them on the next startup. Keep an exported copy
 off the device. Backups include book cover files; manga and poster image URLs are
 preserved. Complete archives are limited to 150 MB; per-library exports remain
 available for larger collections. Trash keeps its existing 30-day retention.
+
+On Android, **Automatic complete backups** on the same screen lets you choose a
+folder, save the first backup immediately, switch between Daily and Weekly, run
+**Back up now**, or turn scheduling off. Android chooses the exact execution time;
+the schedule persists across reboots. Only files named `companion-auto-*.companion`
+are subject to the three-file retention rule. Existing manual archives and the
+separate legacy film backup schedule are preserved. Restore an automatic archive
+using **Choose backup to restore**, then review its contents as usual. Folder
+access and schedule settings stay on the device and are not restored from archives.
 
 Use each library's backup format for an individual round trip. CSV is a report for
 Manga, Film and Anime. The Manga and Anime import pickers accept files regardless of their extension or
@@ -152,7 +178,7 @@ and Gradle resolve the NDK version declared by the pinned Flutter SDK. The commi
 
 ```sh
 flutter analyze
-dart format --output=none --set-exit-if-changed lib test integration_test
+dart format --output=none --set-exit-if-changed lib test integration_test test_driver scripts/smoke_catalogs.dart
 flutter test --reporter expanded
 node --test scripts/release.test.cjs
 python -m unittest discover -s scripts -p "test_*.py"
@@ -172,6 +198,22 @@ On a disposable Android emulator, run the integration suite:
 ```sh
 flutter test integration_test/companion_test.dart -d emulator-5554
 ```
+
+Optional live catalog checks and native automatic-backup regression checks:
+
+```sh
+dart run scripts/smoke_catalogs.dart
+python scripts/test_native_backups.py --device emulator-5554 --isolated-emulator
+```
+
+The native backup runner requires a separate disposable AVD named
+`Companion_Backup_Test` (an optional suffix is accepted) and clears its Companion
+test data. It refuses other AVDs and physical devices. The runner uses Flutter
+Drive with software rendering for emulator compatibility. It drives the real
+Android folder picker, verifies all-library archives
+and book covers, checks retention and failed preparation, restores a saved archive,
+then terminates the UI process and forces the persisted job to test background
+archive creation. It does not run on physical devices.
 
 The suite covers section navigation, persistence, typed imports and native
 channels. Use an emulator or test device without valuable library data.

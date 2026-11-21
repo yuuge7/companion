@@ -1,10 +1,12 @@
+import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter/services.dart';
 
+import 'automatic_backup.dart';
 import 'companion_backup.dart';
 import 'companion_data.dart';
 
@@ -15,11 +17,66 @@ class CompanionBackupScreen extends StatefulWidget {
   State<CompanionBackupScreen> createState() => _CompanionBackupScreenState();
 }
 
-class _CompanionBackupScreenState extends State<CompanionBackupScreen> {
+class _CompanionBackupScreenState extends State<CompanionBackupScreen>
+    with WidgetsBindingObserver {
   late final _backup = CompanionBackup(widget.data);
   bool _busy = false;
   String? _message;
   CompanionBackupPreview? _preview;
+  Map<String, dynamic>? _automatic;
+  Timer? _statusTimer;
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _refreshAutomatic();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _statusTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _refreshAutomatic();
+  }
+
+  Future<void> _refreshAutomatic() async {
+    try {
+      final status = await AutomaticBackup.status();
+      if (mounted) {
+        setState(() => _automatic = status);
+        _statusTimer?.cancel();
+        if (status['running'] == true) {
+          _statusTimer = Timer(const Duration(seconds: 2), _refreshAutomatic);
+        }
+      }
+    } on MissingPluginException {
+      // The scheduling controls are Android-only; manual backups work elsewhere.
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _message = 'Could not read automatic backup status. Reopen this screen to try again.',
+        );
+      }
+    }
+  }
+
+  Future<void> _automaticAction(Future<void> Function() action) =>
+      _run(() async {
+        try {
+          await action();
+        } on PlatformException catch (e) {
+          throw FormatException(
+            e.message ?? 'Could not update automatic backups.',
+          );
+        } finally {
+          await _refreshAutomatic();
+        }
+      });
   Future<void> _run(Future<void> Function() action) async {
     if (_busy) return;
     setState(() {
@@ -148,6 +205,105 @@ class _CompanionBackupScreenState extends State<CompanionBackupScreen> {
               padding: const EdgeInsets.symmetric(vertical: 16),
               child: Semantics(liveRegion: true, child: Text(_message!)),
             ),
+          if (_automatic case final status?) ...[
+            const Divider(height: 40),
+            Text(
+              'Automatic complete backups',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Save all four libraries and book covers to a folder you choose. Android runs backups around the chosen interval, including when Companion is closed. The latest 3 automatic backups are kept.',
+            ),
+            const SizedBox(height: 12),
+            if (status['enabled'] == true) ...[
+              Text('Folder: ${status['folder']}'),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<int>(
+                key: ValueKey(status['hours']),
+                initialValue: status['hours'] as int? ?? 168,
+                decoration: const InputDecoration(labelText: 'Back up'),
+                items: const [
+                  DropdownMenuItem(value: 24, child: Text('Daily')),
+                  DropdownMenuItem(value: 168, child: Text('Weekly')),
+                ],
+                onChanged: _busy || status['running'] == true
+                    ? null
+                    : (hours) => _automaticAction(
+                        () => AutomaticBackup.setFrequency(hours!),
+                      ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                (status['lastBackup'] as int? ?? 0) == 0
+                    ? 'No successful automatic backup yet.'
+                    : 'Last successful backup: ${DateFormat.yMMMd().add_jm().format(DateTime.fromMillisecondsSinceEpoch(status['lastBackup'] as int))}',
+              ),
+              if (status['scheduled'] == false)
+                const Text(
+                  'Automatic scheduling needs attention. Choose the backup folder again.',
+                ),
+              if ((status['error'] as String? ?? '').isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Semantics(
+                    liveRegion: true,
+                    child: Text(
+                      status['error'] as String,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: _busy || status['running'] == true
+                    ? null
+                    : () => _automaticAction(() async {
+                        await AutomaticBackup.backupNow();
+                        if (mounted) {
+                          setState(
+                            () => _message = 'Complete automatic backup saved.',
+                          );
+                        }
+                      }),
+                icon: const Icon(Icons.backup_outlined),
+                label: Text(
+                  status['running'] == true
+                      ? 'Backup in progress'
+                      : 'Back up now',
+                ),
+              ),
+            ],
+            OutlinedButton.icon(
+              onPressed: _busy || status['running'] == true
+                  ? null
+                  : () => _automaticAction(() async {
+                      if (await AutomaticBackup.chooseFolder()) {
+                        await AutomaticBackup.backupNow();
+                        if (mounted) {
+                          setState(
+                            () => _message = 'Automatic backups enabled. First complete backup saved.',
+                          );
+                        }
+                      }
+                    }),
+              icon: const Icon(Icons.folder_outlined),
+              label: Text(
+                status['enabled'] == true
+                    ? 'Change backup folder'
+                    : 'Choose automatic backup folder',
+              ),
+            ),
+            if (status['enabled'] == true)
+              TextButton(
+                onPressed: _busy || status['running'] == true
+                    ? null
+                    : () => _automaticAction(AutomaticBackup.disable),
+                child: const Text('Turn off automatic backups'),
+              ),
+          ],
           if (_preview case final preview?) ...[
             const Divider(height: 40),
             Text(
