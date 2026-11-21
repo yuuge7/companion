@@ -38,6 +38,8 @@ Library data stays on the device; poster and cover images can be fetched online.
 Manga entries show their last edit date on the shelf and in details. Film **Recent**
 sorts by the latest recorded viewing, with undated entries last; **Last edited**
 and **Date added** are separate sort choices.
+In the manga editor, correct or clear **Started** and **Finished** dates by typing
+`YYYY-MM-DD` or using the calendar button. Changing these dates preserves chapter history.
 The calendar button in any library opens Activity, Rediscover and Collection.
 Shared Settings also links to these tools and Complete Companion backup.
 

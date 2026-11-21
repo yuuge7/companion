@@ -566,6 +566,7 @@ Future<void> showLibraryRating(
     context: context,
     builder: (ctx) => AlertDialog(
       title: const Text('Rating'),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
       content: SharedStarRating(
         value: value,
         onChanged: (rating) => Navigator.pop(ctx, rating),

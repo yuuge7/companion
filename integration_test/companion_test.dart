@@ -217,6 +217,107 @@ void main() {
       expect(planetEntry.animeFormat, AnimeFormat.unknown);
       expect(planetEntry.history, isEmpty);
       planetReopened.dispose();
+
+      // Opt in when a host ADB driver is available. This exercises Android's
+      // document picker and hardware Back, which widget channel mocks bypass.
+      if (const bool.fromEnvironment('NATIVE_REGRESSIONS')) {
+        Future<void> until(bool Function() ready) async {
+          final timer = Stopwatch()..start();
+          while (!ready() && timer.elapsed < const Duration(seconds: 90)) {
+            await Future<void>.delayed(const Duration(milliseconds: 100));
+            await tester.pump();
+          }
+          expect(ready(), isTrue);
+          await tester.pumpAndSettle();
+        }
+
+        Future<void> nativeBack(String stage) async {
+          debugPrint('NATIVE_BACK:$stage');
+          await until(() => find.byType(LibraryItemRow).evaluate().isNotEmpty);
+          expect(tester.takeException(), isNull);
+        }
+
+        // Leave editors on every stack to catch a Back event reaching hidden
+        // navigators. Each one must still be there when its tab is selected.
+        for (final label in ['Books', 'Manga', 'Film', 'Anime']) {
+          await select(label);
+          await tester.tap(find.byType(LibraryItemRow).first);
+          await tester.pumpAndSettle();
+        }
+        for (final label in ['Anime', 'Film', 'Manga', 'Books']) {
+          await select(label);
+          expect(find.byType(LibraryItemRow), findsNothing);
+          await nativeBack('editor-$label');
+        }
+
+        await select('Manga');
+        await tester.tap(find.text('Integration manga'));
+        await tester.pumpAndSettle();
+        for (final (label, value) in [
+          ('Started', '2020-01-02'),
+          ('Finished', '2021-03-04'),
+        ]) {
+          final field = find.widgetWithText(TextFormField, label);
+          await tester.ensureVisible(field);
+          await tester.enterText(field, value);
+        }
+        FocusManager.instance.primaryFocus?.unfocus();
+        await tester.tap(find.widgetWithText(TextButton, 'Save'));
+        await until(() => find.byType(LibraryItemRow).evaluate().isNotEmpty);
+        expect(
+          mangaState.byId('manga')!.startedAt,
+          DateTime(2020, 1, 2).millisecondsSinceEpoch,
+        );
+        expect(
+          mangaState.byId('manga')!.finishedAt,
+          DateTime(2021, 3, 4).millisecondsSinceEpoch,
+        );
+        expect(
+          MangaStore(preferences, key: mangaKey).load().single.startedAt,
+          mangaState.byId('manga')!.startedAt,
+        );
+
+        for (final label in ['Manga', 'Anime']) {
+          await select(label);
+          await tester.tap(find.byTooltip('$label tools'));
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('Import & export'));
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('Import backup'));
+          debugPrint('NATIVE_PICKER:$label');
+          final title = label == 'Manga'
+              ? 'Import from Anime-Planet?'
+              : 'Preview anime import';
+          await until(() => find.text(title).evaluate().isNotEmpty);
+          await tester.tap(
+            find.text(label == 'Manga' ? 'Merge' : 'Merge anime library'),
+          );
+          await until(() => find.text(title).evaluate().isEmpty);
+          if (label == 'Manga') {
+            await mangaState.settle();
+            expect(mangaState.entries.length, 190);
+          } else {
+            await anime.settle();
+            expect(anime.entries.length, 532);
+          }
+          await tester.pumpAndSettle();
+          await nativeBack('import-$label');
+          for (final other in ['Books', 'Manga', 'Film', 'Anime']) {
+            await select(other);
+            await tester.enterText(
+              find.byKey(const ValueKey('library-search')),
+              'nothing-matches',
+            );
+            await tester.pumpAndSettle();
+            expect(find.text('No matching titles'), findsOneWidget);
+            await tester.tap(find.byTooltip('Clear search'));
+            await tester.pumpAndSettle();
+            await tester.tap(find.byType(LibraryItemRow).first);
+            await tester.pumpAndSettle();
+            await nativeBack('after-$label-$other');
+          }
+        }
+      }
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
       reopened.dispose();

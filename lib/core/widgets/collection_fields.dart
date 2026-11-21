@@ -16,8 +16,10 @@ class CollectionFields extends StatelessWidget {
     title: const Text('Physical collection'),
     subtitle: Text(
       value.isTracked ? value.summary : 'Ownership, shelf, loans and volumes',
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
     ),
-    childrenPadding: const EdgeInsets.only(bottom: 16),
+    childrenPadding: const EdgeInsets.only(top: 16, bottom: 16),
     children: [
       DropdownButtonFormField<Ownership>(
         initialValue: value.ownership,
@@ -28,7 +30,7 @@ class CollectionFields extends StatelessWidget {
             .toList(),
         onChanged: (v) => onChanged(value.copyWith(ownership: v)),
       ),
-      const SizedBox(height: 14),
+      const SizedBox(height: 20),
       TextFormField(
         initialValue: value.shelf,
         decoration: const InputDecoration(
@@ -37,28 +39,27 @@ class CollectionFields extends StatelessWidget {
         ),
         onChanged: (s) => onChanged(value.copyWith(shelf: s.trim())),
       ),
-      const SizedBox(height: 14),
+      const SizedBox(height: 20),
       TextFormField(
         initialValue: value.borrowedFrom,
         decoration: const InputDecoration(labelText: 'Borrowed from'),
         onChanged: (s) => onChanged(value.copyWith(borrowedFrom: s.trim())),
       ),
-      const SizedBox(height: 14),
+      const SizedBox(height: 20),
       TextFormField(
         initialValue: value.lentTo,
         decoration: const InputDecoration(
           labelText: 'Lent to',
           helperText: 'Clear this name when it is returned.',
+          helperMaxLines: 3,
         ),
         onChanged: (s) => onChanged(value.copyWith(lentTo: s.trim())),
       ),
-      const SizedBox(height: 14),
+      const SizedBox(height: 20),
       TextFormField(
         initialValue: value.totalVolumes?.toString() ?? '',
         keyboardType: TextInputType.number,
-        decoration: const InputDecoration(
-          labelText: 'Volumes in the complete set',
-        ),
+        decoration: const InputDecoration(labelText: 'Total volumes'),
         validator: (s) =>
             s!.isNotEmpty &&
                 (int.tryParse(s) == null ||
@@ -70,7 +71,7 @@ class CollectionFields extends StatelessWidget {
           value.copyWith(totalVolumes: int.tryParse(s), clearTotal: s.isEmpty),
         ),
       ),
-      const SizedBox(height: 14),
+      const SizedBox(height: 20),
       TextFormField(
         initialValue: value.volumes.join(', '),
         decoration: const InputDecoration(

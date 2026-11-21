@@ -71,6 +71,10 @@ class _EditSheetState extends State<_EditSheet> {
   late final TextEditingController _currentCh;
   late final TextEditingController _totalCh;
   late final TextEditingController _rereads;
+  late final TextEditingController _started;
+  late final TextEditingController _finished;
+  bool _startedChanged = false;
+  bool _finishedChanged = false;
   late ShelfStatus _status;
   String? _error;
   final _form = GlobalKey<FormState>();
@@ -96,6 +100,8 @@ class _EditSheetState extends State<_EditSheet> {
       text: e == null || e.rereads == 0 ? '' : '${e.rereads}',
     );
     _status = e?.status ?? ShelfStatus.reading;
+    _started = TextEditingController(text: _dateText(e?.startedAt));
+    _finished = TextEditingController(text: _dateText(e?.finishedAt));
   }
 
   @override
@@ -107,6 +113,8 @@ class _EditSheetState extends State<_EditSheet> {
       _currentCh,
       _totalCh,
       _rereads,
+      _started,
+      _finished,
     ]) {
       c.dispose();
     }
@@ -156,8 +164,74 @@ class _EditSheetState extends State<_EditSheet> {
           .moveTo(_status, now: now)
           .copyWith(lastUpdated: now);
     }
-    Navigator.of(context).pop(entry.copyWith(collection: _collection));
+    Navigator.of(context).pop(
+      entry.copyWith(
+        collection: _collection,
+        startedAt: _startedChanged
+            ? _parseDate(_started.text)
+            : entry.startedAt,
+        finishedAt: _finishedChanged
+            ? _parseDate(_finished.text)
+            : entry.finishedAt,
+      ),
+    );
   }
+
+  static String _dateText(int? timestamp) {
+    if (timestamp == null) return '';
+    final date = DateTime.fromMillisecondsSinceEpoch(timestamp);
+    return '${date.year.toString().padLeft(4, '0')}-'
+        '${date.month.toString().padLeft(2, '0')}-'
+        '${date.day.toString().padLeft(2, '0')}';
+  }
+
+  static int? _parseDate(String text) {
+    final value = text.trim();
+    if (!RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(value)) return null;
+    final date = DateTime.tryParse(value);
+    if (date == null ||
+        date.year < 1 ||
+        _dateText(date.millisecondsSinceEpoch) != value) {
+      return null;
+    }
+    return date.millisecondsSinceEpoch;
+  }
+
+  Widget _dateField(
+    String label,
+    TextEditingController controller,
+    VoidCallback changed,
+  ) => TextFormField(
+    controller: controller,
+    keyboardType: TextInputType.datetime,
+    onChanged: (_) => changed(),
+    validator: (text) => text!.trim().isNotEmpty && _parseDate(text) == null
+        ? 'Use a valid date: YYYY-MM-DD.'
+        : null,
+    decoration: InputDecoration(
+      labelText: label,
+      hintText: 'YYYY-MM-DD',
+      suffixIcon: IconButton(
+        tooltip: 'Choose ${label.toLowerCase()} date',
+        icon: const Icon(Icons.calendar_today_outlined),
+        onPressed: () async {
+          FocusManager.instance.primaryFocus?.unfocus();
+          final timestamp = _parseDate(controller.text);
+          final date = await showDatePicker(
+            context: context,
+            initialDate: timestamp == null
+                ? DateTime.now()
+                : DateTime.fromMillisecondsSinceEpoch(timestamp),
+            firstDate: DateTime(1),
+            lastDate: DateTime(9999, 12, 31),
+          );
+          if (!mounted || date == null) return;
+          controller.text = _dateText(date.millisecondsSinceEpoch);
+          changed();
+        },
+      ),
+    ),
+  );
 
   Widget _field({
     required String label,
@@ -227,8 +301,7 @@ class _EditSheetState extends State<_EditSheet> {
     );
   }
 
-  /// Read-only record for an existing title: when it was started and
-  /// finished, and the last few logged steps.
+  /// Creation, edit metadata and the last few logged chapter steps.
   Widget _history(MangaEntry e) {
     final t = context.tk;
     final recent = e.history.reversed.take(6).toList();
@@ -239,8 +312,6 @@ class _EditSheetState extends State<_EditSheet> {
         const SizedBox(height: 4),
         _historyLine('Added', shortDate(e.addedAt)),
         _historyLine('Last edited', editedLabel(e.lastUpdated)),
-        _historyLine('Started', shortDate(e.startedAt)),
-        _historyLine('Finished', shortDate(e.finishedAt)),
         const SizedBox(height: 6),
         if (recent.isEmpty)
           Text(
@@ -379,6 +450,15 @@ class _EditSheetState extends State<_EditSheet> {
                   const SizedBox(height: 22),
                   const SizedBox(height: 8),
                   _statusPicker(),
+                  const SizedBox(height: 22),
+                  _dateField('Started', _started, () => _startedChanged = true),
+                  const SizedBox(height: 20),
+                  _dateField(
+                    'Finished',
+                    _finished,
+                    () => _finishedChanged = true,
+                  ),
+                  const SizedBox(height: 16),
                   CollectionFields(
                     value: _collection,
                     onChanged: (v) => setState(() => _collection = v),

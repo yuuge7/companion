@@ -132,6 +132,54 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  testWidgets('system back closes only the active library route', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(CompanionApp(dependencies: deps));
+    await tester.pumpAndSettle();
+    for (final label in ['Books', 'Manga', 'Film', 'Anime']) {
+      await select(tester, label);
+      await tester.tap(find.byType(LibraryItemRow));
+      await tester.pumpAndSettle();
+    }
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.byType(LibraryItemRow), findsOneWidget);
+    for (final label in ['Books', 'Manga', 'Film']) {
+      await select(tester, label);
+      expect(find.byType(LibraryItemRow), findsNothing);
+      expect(find.byType(BackButton), findsOneWidget);
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.byType(LibraryItemRow), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    }
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('five-star rating fits a narrow phone', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(320, 760));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              onPressed: () => showLibraryRating(context, 5, (_) async {}),
+              child: const Text('Rate'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Rate'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('Modes isolate libraries, preserve routes and share settings', (
     tester,
   ) async {

@@ -370,8 +370,13 @@ class _CompanionShellState extends State<CompanionShell> {
           child: ScaffoldMessenger(
             child: NavigatorPopHandler<Object?>(
               enabled: index == _index,
-              onPopWithResult: (result) =>
-                  _navigators[index].currentState?.pop(result),
+              onPopWithResult: (result) {
+                // Disabled handlers still receive a blocked root pop. Leave
+                // hidden libraries and each navigator's first route intact.
+                if (index == _index) {
+                  _navigators[index].currentState?.maybePop(result);
+                }
+              },
               child: Navigator(
                 key: _navigators[index],
                 onGenerateRoute: (_) => MaterialPageRoute<void>(

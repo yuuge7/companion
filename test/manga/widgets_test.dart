@@ -46,6 +46,86 @@ Future<void> pumpHome(WidgetTester tester, AppState state) async {
 }
 
 void main() {
+  testWidgets('manga dates can be edited, saved, reopened and cleared', (
+    tester,
+  ) async {
+    final state = await stateWith([
+      entry('Berserk', chapter: 10).copyWith(
+        startedAt: DateTime(2020, 1, 2, 15).millisecondsSinceEpoch,
+        finishedAt: DateTime(2021, 3, 4, 16).millisecondsSinceEpoch,
+        history: const [ReadEvent(at: 1000, from: 0, to: 10)],
+      ),
+    ]);
+    await pumpHome(tester, state);
+    Future<void> open() async {
+      await tester.tap(row('Berserk'));
+      await tester.pumpAndSettle();
+    }
+
+    Future<void> change(String label, String value) async {
+      final field = find.widgetWithText(TextFormField, label);
+      await tester.ensureVisible(field);
+      await tester.enterText(field, value);
+      await tester.pump();
+    }
+
+    await open();
+    await change('Started', '2019-02-03');
+    await change('Finished', '2020-04-05');
+    await tester.tap(find.widgetWithText(TextButton, 'Save'));
+    await tester.pumpAndSettle();
+    expect(
+      state.entries.single.startedAt,
+      DateTime(2019, 2, 3).millisecondsSinceEpoch,
+    );
+    expect(
+      state.entries.single.finishedAt,
+      DateTime(2020, 4, 5).millisecondsSinceEpoch,
+    );
+    expect(state.entries.single.history, const [
+      ReadEvent(at: 1000, from: 0, to: 10),
+    ]);
+    expect(
+      (await MangaStore.open()).load().single.finishedAt,
+      state.entries.single.finishedAt,
+    );
+    await open();
+    await change('Started', '');
+    await change('Finished', '');
+    await tester.tap(find.widgetWithText(TextButton, 'Save'));
+    await tester.pumpAndSettle();
+    expect(state.entries.single.startedAt, isNull);
+    expect(state.entries.single.finishedAt, isNull);
+  });
+
+  testWidgets('invalid manga dates cannot save and calendar dates can', (
+    tester,
+  ) async {
+    final state = await stateWith([entry('Berserk')]);
+    await pumpHome(tester, state);
+    await tester.tap(row('Berserk'));
+    await tester.pumpAndSettle();
+    final field = find.widgetWithText(TextFormField, 'Started');
+    await tester.ensureVisible(field);
+    await tester.enterText(field, '2025-02-30');
+    await tester.tap(find.widgetWithText(TextButton, 'Save'));
+    await tester.pumpAndSettle();
+    expect(find.text('Use a valid date: YYYY-MM-DD.'), findsOneWidget);
+    await tester.ensureVisible(field);
+    await tester.tap(find.byTooltip('Choose started date'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(TextButton, 'Save'));
+    await tester.pumpAndSettle();
+    final now = DateTime.now();
+    expect(
+      state.entries.single.startedAt,
+      DateTime(now.year, now.month, now.day).millisecondsSinceEpoch,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('import preview lists changes and returns the choice', (
     tester,
   ) async {

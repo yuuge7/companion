@@ -17,8 +17,7 @@ class SharedStarRating extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Semantics(
     label: value == 0 ? 'Not rated' : 'Rated $value out of 5',
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
+    child: Wrap(
       children: List.generate(5, (i) {
         final n = i + 1;
         return Semantics(
